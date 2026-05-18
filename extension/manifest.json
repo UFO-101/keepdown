@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KeepDown",
-  "version": "1.0",
+  "version": "1.1.0",
   "description": "Markdown renderer for Google Keep",
   "icons": {
     "16": "icons/KeepDown_Logo_16x16.png",
@@ -33,4 +33,4 @@
       "css": ["styles.css"]
     }
   ]
-} 
+}

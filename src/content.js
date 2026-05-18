@@ -14,7 +14,16 @@ const NOTE_SOURCE_COLUMN_SELECTOR = '.IZ65Hb-qJTHM-haAclf, .fmcmS-h1U9Be-LS81yb'
 const PIN_BUTTON_SELECTOR = '.IZ65Hb-s2gQvd > [aria-label="Pin note"], .IZ65Hb-s2gQvd > .IZ65Hb-nQ1Faf';
 const MODAL_WIDTH_KEY = 'modalWidth';
 const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
-const NOTE_MARKDOWN_ENABLED_PREFIX = 'noteMarkdownEnabled:';
+const NOTE_MARKDOWN_MODE_PREFIX = 'noteMarkdownMode:';
+const VIEW_MODE_EDITOR = 'editor';
+const VIEW_MODE_SPLIT = 'split';
+const VIEW_MODE_PREVIEW = 'preview';
+const VIEW_MODES = [VIEW_MODE_EDITOR, VIEW_MODE_SPLIT, VIEW_MODE_PREVIEW];
+const VIEW_MODE_LABELS = {
+    [VIEW_MODE_EDITOR]: 'Editor',
+    [VIEW_MODE_SPLIT]: 'Editor and Preview',
+    [VIEW_MODE_PREVIEW]: 'Preview'
+};
 
 let currentModalWidth = 75;
 let defaultMarkdownEnabled = true;
@@ -72,8 +81,20 @@ function getText(element) {
     return (element?.innerText || element?.textContent || '').trim();
 }
 
+function getLineText(element) {
+    return (element.textContent || '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\r?\n|\r/g, '')
+        .trimEnd();
+}
+
 function getMarkdownText(noteContent) {
-    return getText(noteContent)
+    const lineElements = noteContent.querySelectorAll('p, div[role="presentation"]');
+    const text = lineElements.length > 0
+        ? Array.from(lineElements, getLineText).join('\n')
+        : getText(noteContent);
+
+    return text
         .replace(/\u00a0/g, ' ')
         .replace(/^"(.*)"$/gm, '$1')
         .replace(/\\n/g, '\n')
@@ -86,27 +107,42 @@ function getLocationNoteKey() {
     return match?.[1] ? `hash:${match[1]}` : null;
 }
 
-function getNoteStorageKey(noteKey) {
-    return noteKey ? `${NOTE_MARKDOWN_ENABLED_PREFIX}${noteKey}` : null;
+function getDefaultViewMode() {
+    return defaultMarkdownEnabled ? VIEW_MODE_SPLIT : VIEW_MODE_EDITOR;
 }
 
-async function loadMarkdownPreference(storageKey) {
+function isValidViewMode(mode) {
+    return VIEW_MODES.includes(mode);
+}
+
+function getNoteModeStorageKey(noteKey) {
+    return noteKey ? `${NOTE_MARKDOWN_MODE_PREFIX}${noteKey}` : null;
+}
+
+async function loadViewModePreference(modeStorageKey) {
     const syncResult = await getSyncStorage([DEFAULT_MARKDOWN_ENABLED_KEY]);
     defaultMarkdownEnabled = syncResult[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
 
-    if (!storageKey) {
+    if (!modeStorageKey) {
         return {
-            enabled: defaultMarkdownEnabled,
+            viewMode: getDefaultViewMode(),
             hasNoteOverride: false
         };
     }
 
-    const localResult = await getLocalStorage([storageKey]);
-    const hasNoteOverride = hasOwn(localResult, storageKey);
+    const localResult = await getLocalStorage([modeStorageKey]);
+    const savedMode = localResult[modeStorageKey];
+
+    if (isValidViewMode(savedMode)) {
+        return {
+            viewMode: savedMode,
+            hasNoteOverride: true
+        };
+    }
 
     return {
-        enabled: hasNoteOverride ? localResult[storageKey] !== false : defaultMarkdownEnabled,
-        hasNoteOverride
+        viewMode: getDefaultViewMode(),
+        hasNoteOverride: false
     };
 }
 
@@ -117,66 +153,94 @@ function createPreviewPanel(noteId) {
     return preview;
 }
 
-function createMarkdownToggleButton(context) {
+function createViewModeButton(context, mode) {
     const button = document.createElement('div');
-    button.className = 'Q0hgme-LgbsSe Q0hgme-Bz112c-LgbsSe keep-md-toggle VIpgJd-LgbsSe';
+    button.className = `Q0hgme-LgbsSe Q0hgme-Bz112c-LgbsSe keep-md-view-button keep-md-view-${mode} VIpgJd-LgbsSe`;
+    button.dataset.viewMode = mode;
     button.setAttribute('role', 'button');
     button.setAttribute('tabindex', '0');
+    return button;
+}
 
-    button.addEventListener('click', function(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        setNoteMarkdownEnabled(context, !context.markdownEnabled);
-    });
+function createViewModeControls(context) {
+    const controls = document.createElement('div');
+    controls.className = 'keep-md-view-controls';
 
-    button.addEventListener('keydown', function(event) {
-        if (event.key !== 'Enter' && event.key !== ' ') {
+    for (const mode of VIEW_MODES) {
+        controls.appendChild(createViewModeButton(context, mode));
+    }
+
+    controls.addEventListener('pointerdown', stopKeepEvent, true);
+    controls.addEventListener('mousedown', stopKeepEvent, true);
+    controls.addEventListener('touchstart', stopKeepEvent, true);
+    controls.addEventListener('click', function(event) {
+        const button = event.target.closest('.keep-md-view-button');
+        if (!button || !controls.contains(button)) {
             return;
         }
 
         event.preventDefault();
         event.stopPropagation();
-        setNoteMarkdownEnabled(context, !context.markdownEnabled);
-    });
+        setNoteViewMode(context, button.dataset.viewMode);
+    }, true);
+    controls.addEventListener('keydown', function(event) {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+        }
 
-    return button;
+        const button = event.target.closest('.keep-md-view-button');
+        if (!button || !controls.contains(button)) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        setNoteViewMode(context, button.dataset.viewMode);
+    }, true);
+
+    return controls;
 }
 
-function ensureMarkdownToggle(context) {
-    if (context.toggleButton?.isConnected) {
-        updateMarkdownToggle(context);
+function stopKeepEvent(event) {
+    event.stopPropagation();
+}
+
+function ensureViewModeControls(context) {
+    if (context.viewControls?.isConnected) {
+        updateViewModeControls(context);
         return;
     }
 
-    const existingButton = context.modalNote.querySelector('.keep-md-toggle');
-    if (existingButton) {
-        context.toggleButton = existingButton;
-        updateMarkdownToggle(context);
-        return;
-    }
+    context.modalNote.querySelector('.keep-md-view-controls')?.remove();
 
     const pinButton = context.modalNote.querySelector(PIN_BUTTON_SELECTOR);
     if (!pinButton?.parentElement) {
         return;
     }
 
-    const button = createMarkdownToggleButton(context);
-    pinButton.parentElement.insertBefore(button, pinButton);
-    context.toggleButton = button;
-    updateMarkdownToggle(context);
+    const controls = createViewModeControls(context);
+    pinButton.parentElement.insertBefore(controls, pinButton);
+    context.viewControls = controls;
+    updateViewModeControls(context);
 }
 
-function updateMarkdownToggle(context) {
-    if (!context.toggleButton) {
+function updateViewModeControls(context) {
+    if (!context.viewControls) {
         return;
     }
 
-    const label = context.markdownEnabled ? 'Disable Markdown preview' : 'Enable Markdown preview';
+    context.viewControls.dataset.viewMode = context.viewMode;
 
-    context.toggleButton.classList.toggle('is-active', context.markdownEnabled);
-    context.toggleButton.setAttribute('aria-pressed', String(context.markdownEnabled));
-    context.toggleButton.setAttribute('aria-label', label);
-    context.toggleButton.setAttribute('data-tooltip-text', label);
+    for (const button of context.viewControls.querySelectorAll('.keep-md-view-button')) {
+        const mode = button.dataset.viewMode;
+        const isActive = mode === context.viewMode;
+        const label = VIEW_MODE_LABELS[mode];
+
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', String(isActive));
+        button.setAttribute('aria-label', label);
+        button.setAttribute('data-tooltip-text', label);
+    }
 }
 
 function updatePreview(context) {
@@ -247,85 +311,124 @@ function removeMarkdownPreview(context) {
     }
 
     context.sourceColumn.classList.remove('keep-md-source');
+    context.sourceColumn.classList.remove('keep-md-source-hidden');
     context.container = null;
     context.preview = null;
 }
 
-function applyMarkdownState(context) {
-    updateMarkdownToggle(context);
+function applyViewMode(context) {
+    updateViewModeControls(context);
 
-    if (context.markdownEnabled) {
-        showMarkdownPreview(context);
-    } else {
+    if (context.viewMode === VIEW_MODE_EDITOR) {
         removeMarkdownPreview(context);
+        return;
+    }
+
+    showMarkdownPreview(context);
+
+    const isPreviewOnly = context.viewMode === VIEW_MODE_PREVIEW;
+    context.container?.classList.toggle('is-preview-only', isPreviewOnly);
+    context.sourceColumn.classList.toggle('keep-md-source-hidden', isPreviewOnly);
+}
+
+async function setNoteViewMode(context, mode) {
+    if (!isValidViewMode(mode)) {
+        return;
+    }
+
+    context.viewMode = mode;
+    context.hasNoteOverride = Boolean(context.modeStorageKey);
+
+    applyViewMode(context);
+    if (context.modeStorageKey) {
+        await setLocalStorage({[context.modeStorageKey]: mode});
     }
 }
 
-async function setNoteMarkdownEnabled(context, enabled) {
-    context.markdownEnabled = enabled;
-    context.hasNoteOverride = Boolean(context.storageKey);
-
-    applyMarkdownState(context);
-    if (context.storageKey) {
-        await setLocalStorage({[context.storageKey]: enabled});
+function getCurrentModalParts(modalNote) {
+    const noteContentMatch = findNoteContent(modalNote);
+    if (!noteContentMatch) {
+        return null;
     }
+
+    return {
+        noteContent: noteContentMatch.element,
+        sourceColumn: getSourceColumn(noteContentMatch.element),
+        noteKey: getLocationNoteKey()
+    };
+}
+
+function isContextStale(context, currentParts) {
+    if (!currentParts) {
+        return !context.sourceColumn.isConnected || !context.modalNote.contains(context.sourceColumn);
+    }
+
+    if (currentParts.noteKey && currentParts.noteKey !== context.noteKey) {
+        return true;
+    }
+
+    return !context.sourceColumn.isConnected ||
+        !context.modalNote.contains(context.sourceColumn) ||
+        currentParts.sourceColumn !== context.sourceColumn;
+}
+
+function rebuildContext(context) {
+    removeMarkdownPreview(context);
+    context.viewControls?.remove();
+    destroyContext(context);
+    handleNoteOpen(context.modalNote);
 }
 
 async function handleNoteOpen(modalNote) {
     const existingContext = modalContexts.get(modalNote);
     if (existingContext) {
-        const nextLocationKey = getLocationNoteKey();
-        if (nextLocationKey && nextLocationKey !== existingContext.noteKey) {
-            removeMarkdownPreview(existingContext);
-            existingContext.toggleButton?.remove();
-            destroyContext(existingContext);
-            handleNoteOpen(modalNote);
+        const currentParts = getCurrentModalParts(modalNote);
+        if (isContextStale(existingContext, currentParts)) {
+            rebuildContext(existingContext);
             return;
         }
 
-        ensureMarkdownToggle(existingContext);
+        ensureViewModeControls(existingContext);
+        applyViewMode(existingContext);
         return;
     }
 
-    const noteContentMatch = findNoteContent(modalNote);
-    if (!noteContentMatch) {
+    const currentParts = getCurrentModalParts(modalNote);
+    if (!currentParts) {
         return;
     }
 
-    const noteContent = noteContentMatch.element;
-    const sourceColumn = getSourceColumn(noteContent);
-    const parent = sourceColumn.parentElement;
+    const parent = currentParts.sourceColumn.parentElement;
     if (!parent) {
         return;
     }
 
-    const noteKey = getLocationNoteKey();
     const context = {
         modalNote,
-        sourceColumn,
-        noteKey,
-        storageKey: getNoteStorageKey(noteKey),
-        markdownEnabled: defaultMarkdownEnabled,
+        sourceColumn: currentParts.sourceColumn,
+        noteKey: currentParts.noteKey,
+        modeStorageKey: getNoteModeStorageKey(currentParts.noteKey),
+        viewMode: getDefaultViewMode(),
         hasNoteOverride: false,
         container: null,
         preview: null,
         observer: null,
-        toggleButton: null
+        viewControls: null
     };
 
     modalContexts.set(modalNote, context);
     modalContextSet.add(context);
-    ensureMarkdownToggle(context);
+    ensureViewModeControls(context);
 
-    const preference = await loadMarkdownPreference(context.storageKey);
+    const preference = await loadViewModePreference(context.modeStorageKey);
     if (!modalNote.isConnected) {
         destroyContext(context);
         return;
     }
 
-    context.markdownEnabled = preference.enabled;
+    context.viewMode = preference.viewMode;
     context.hasNoteOverride = preference.hasNoteOverride;
-    applyMarkdownState(context);
+    applyViewMode(context);
 }
 
 function destroyContext(context) {
@@ -388,8 +491,8 @@ function refreshDefaultMarkdownContexts() {
             continue;
         }
 
-        context.markdownEnabled = defaultMarkdownEnabled;
-        applyMarkdownState(context);
+        context.viewMode = getDefaultViewMode();
+        applyViewMode(context);
     }
 }
 
@@ -419,18 +522,20 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     cleanupDisconnectedContexts();
 
     for (const context of modalContextSet) {
-        if (!context.storageKey) {
+        if (!context.modeStorageKey) {
             continue;
         }
 
-        const change = changes[context.storageKey];
+        const change = changes[context.modeStorageKey];
         if (!change) {
             continue;
         }
 
         context.hasNoteOverride = hasOwn(change, 'newValue');
-        context.markdownEnabled = context.hasNoteOverride ? change.newValue !== false : defaultMarkdownEnabled;
-        applyMarkdownState(context);
+        context.viewMode = context.hasNoteOverride && isValidViewMode(change.newValue)
+            ? change.newValue
+            : getDefaultViewMode();
+        applyViewMode(context);
     }
 });
 
