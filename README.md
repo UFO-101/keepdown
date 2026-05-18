@@ -7,17 +7,38 @@ A Chrome extension that adds real-time Markdown preview to Google Keep notes. Wr
 ## Features
 
 - Real-time side-by-side Markdown preview
+- Three Markdown view modes: **Editor** / **Editor and Preview** / **Preview**
 - Built on top of [micromark](https://github.com/micromark/micromark)
     - 100% CommonMark compliant
     - GitHub Flavored Markdown supported
     - LaTeX math expressions supported
+- Per-note view mode persistence — each note remembers its last selected mode
+- Draggable resize handle with keyboard support for adjusting modal width on the fly
+- Dark and Light preview themes
 
 <img src="docs/screenshots/SummaryScreenshot.png" width="800" alt="Editing a note with markdown">
 
-## Modal Width Control
+## Markdown View Modes
 
-The extension adds a slider in the popup menu to control the width of the note modal. Click the extension icon to access the slider:
-- Changes are saved and persist between sessions
+A three-button toggle is added next to Keep's "Pin note" button inside the modal:
+
+- **Editor** — Default Google Keep editing view, no Markdown preview
+- **Editor and Preview** — Side-by-side editor and rendered Markdown preview
+- **Preview** — Rendered Markdown only, editor hidden
+
+The active mode is saved per-note, so each note remembers its own view preference.
+
+## Extension Settings
+
+Click the extension icon to open the settings popup:
+
+- **Markdown by default** — Toggle whether new notes open in Split mode or Editor mode
+- **Preview theme** — Switch the Markdown preview between Dark and Light themes, with a live preview sample
+- **Editor width** — Slider (50%–95%) to control modal width in Editor-only mode
+- **Preview modes width** — Slider (50%–95%) to control modal width in Split / Preview modes
+- **Reset** — Restore all settings to defaults
+
+All changes sync instantly to any open Keep tab without reloading.
 
 <img src="docs/screenshots/WidthSliderScreenshot.png" width="800" alt="Rendered markdown preview">
 
