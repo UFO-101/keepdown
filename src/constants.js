@@ -28,6 +28,9 @@ export const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
 // Synced setting key for the markdown preview theme.
 export const PREVIEW_THEME_KEY = 'previewTheme';
 
+// Synced setting key for preserving soft line breaks in paragraphs.
+export const PRESERVE_SOFT_LINE_BREAKS_KEY = 'preserveSoftLineBreaks';
+
 // Local setting prefix for per-note view mode overrides.
 export const NOTE_MARKDOWN_MODE_PREFIX = 'noteMarkdownMode:';
 
@@ -54,6 +57,9 @@ export const PREVIEW_THEMES = [PREVIEW_THEME_DARK, PREVIEW_THEME_LIGHT];
 
 // Default preview theme used for new installs and resets.
 export const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
+
+// Default behavior keeps CommonMark soft line breaks collapsed.
+export const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;
 
 // Editor-only view mode.
 export const VIEW_MODE_EDITOR = 'editor';

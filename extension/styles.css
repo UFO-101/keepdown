@@ -7,6 +7,7 @@
     --keep-md-preview-muted: #9aa0a6;
     --keep-md-preview-link: #8ab4f8;
     --keep-md-preview-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    --keep-md-preview-paragraph-white-space: normal;
 }
 
 .keep-md-container {
@@ -201,7 +202,7 @@ html.keep-md-is-resizing * {
 .keep-md-preview p {
     margin-bottom: 12px;
     line-height: 1.5;
-    white-space: normal;  /* Changed from pre-wrap */
+    white-space: var(--keep-md-preview-paragraph-white-space);
 }
 .keep-md-preview em { font-style: italic; }
 .keep-md-preview strong { font-weight: 600; }

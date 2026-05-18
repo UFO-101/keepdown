@@ -12,6 +12,7 @@ A Chrome extension that adds real-time Markdown preview to Google Keep notes. Wr
     - 100% CommonMark compliant
     - GitHub Flavored Markdown supported
     - LaTeX math expressions supported
+- Optional paragraph soft line break preservation for command snippets and plain text lists
 - Per-note view mode persistence — each note remembers its last selected mode
 - Draggable resize handle with keyboard support for adjusting modal width on the fly
 - Dark and Light preview themes
@@ -34,6 +35,7 @@ Click the extension icon to open the settings popup:
 
 - **Markdown by default** — Toggle whether new notes open in Split mode or Editor mode
 - **Preview theme** — Switch the Markdown preview between Dark and Light themes, with a live preview sample
+- **Preserve soft line breaks** — Keep single line breaks visible inside normal paragraphs; disabled by default to preserve standard CommonMark rendering
 - **Editor width** — Slider (50%–95%) to control modal width in Editor-only mode
 - **Preview modes width** — Slider (50%–95%) to control modal width in Split / Preview modes
 - **Reset** — Restore all settings to defaults
@@ -61,7 +63,7 @@ This extension uses minimal permissions:
   All processing is done locally in your browser.
 
 ### storage Permission
-- Used to save your preferences (like the note modal width setting) between browser sessions. This ensures your customized settings persist after closing and reopening your browser.
+- Used to save your preferences (such as note modal widths, preview theme, and paragraph line break behavior) between browser sessions. This ensures your customized settings persist after closing and reopening your browser.
 
 ## Getting Started
 

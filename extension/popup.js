@@ -10,6 +10,9 @@ const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
 // Synced setting key for the markdown preview theme.
 const PREVIEW_THEME_KEY = 'previewTheme';
 
+// Synced setting key for preserving soft line breaks in paragraphs.
+const PRESERVE_SOFT_LINE_BREAKS_KEY = 'preserveSoftLineBreaks';
+
 // Default width used when the note is in Editor mode.
 const DEFAULT_EDITOR_MODAL_WIDTH = '64';
 
@@ -23,8 +26,12 @@ const PREVIEW_THEME_LIGHT = 'light';
 // Default preview theme keeps the current dark reading surface.
 const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
 
+// Default behavior keeps CommonMark soft line breaks collapsed.
+const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;
+
 document.addEventListener('DOMContentLoaded', function() {
     const defaultMarkdownToggle = document.getElementById('default-markdown');
+    const preserveSoftBreaksToggle = document.getElementById('preserve-soft-breaks');
     const previewThemeInputs = Array.from(document.querySelectorAll('input[name="preview-theme"]'));
     const resetButton = document.getElementById('reset-settings');
     const chromeApi = typeof chrome === 'undefined' ? null : chrome;
@@ -46,7 +53,8 @@ document.addEventListener('DOMContentLoaded', function() {
         [EDITOR_MODAL_WIDTH_KEY]: DEFAULT_EDITOR_MODAL_WIDTH,
         [MARKDOWN_MODAL_WIDTH_KEY]: DEFAULT_MARKDOWN_MODAL_WIDTH,
         [DEFAULT_MARKDOWN_ENABLED_KEY]: true,
-        [PREVIEW_THEME_KEY]: DEFAULT_PREVIEW_THEME
+        [PREVIEW_THEME_KEY]: DEFAULT_PREVIEW_THEME,
+        [PRESERVE_SOFT_LINE_BREAKS_KEY]: DEFAULT_PRESERVE_SOFT_LINE_BREAKS
     };
 
     // Keep the range fill and value badge in sync.
@@ -80,6 +88,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Keeps the sample preview aligned with the paragraph line break setting.
+    function setPreserveSoftBreaks(enabled) {
+        const normalizedValue = enabled === true;
+
+        document.body.dataset.preserveSoftBreaks = String(normalizedValue);
+        preserveSoftBreaksToggle.checked = normalizedValue;
+    }
+
     // Applies the full popup state after load, reset, or live storage updates.
     function applySettings(settings) {
         for (const control of widthControls) {
@@ -88,6 +104,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         defaultMarkdownToggle.checked = settings[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
         setPreviewTheme(settings[PREVIEW_THEME_KEY]);
+        setPreserveSoftBreaks(settings[PRESERVE_SOFT_LINE_BREAKS_KEY]);
     }
 
     // Reads current sync settings and refreshes the popup controls.
@@ -97,13 +114,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 EDITOR_MODAL_WIDTH_KEY,
                 MARKDOWN_MODAL_WIDTH_KEY,
                 DEFAULT_MARKDOWN_ENABLED_KEY,
-                PREVIEW_THEME_KEY
+                PREVIEW_THEME_KEY,
+                PRESERVE_SOFT_LINE_BREAKS_KEY
             ], function(result) {
                 applySettings({
                     [EDITOR_MODAL_WIDTH_KEY]: result[EDITOR_MODAL_WIDTH_KEY] || defaultSettings[EDITOR_MODAL_WIDTH_KEY],
                     [MARKDOWN_MODAL_WIDTH_KEY]: result[MARKDOWN_MODAL_WIDTH_KEY] || defaultSettings[MARKDOWN_MODAL_WIDTH_KEY],
                     [DEFAULT_MARKDOWN_ENABLED_KEY]: result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false,
-                    [PREVIEW_THEME_KEY]: normalizePreviewTheme(result[PREVIEW_THEME_KEY] || defaultSettings[PREVIEW_THEME_KEY])
+                    [PREVIEW_THEME_KEY]: normalizePreviewTheme(result[PREVIEW_THEME_KEY] || defaultSettings[PREVIEW_THEME_KEY]),
+                    [PRESERVE_SOFT_LINE_BREAKS_KEY]: result[PRESERVE_SOFT_LINE_BREAKS_KEY] === true
                 });
             });
             return;
@@ -168,6 +187,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (changes[PREVIEW_THEME_KEY]) {
             setPreviewTheme(changes[PREVIEW_THEME_KEY].newValue);
         }
+
+        if (changes[PRESERVE_SOFT_LINE_BREAKS_KEY]) {
+            setPreserveSoftBreaks(changes[PRESERVE_SOFT_LINE_BREAKS_KEY].newValue);
+        }
     });
 
     defaultMarkdownToggle.addEventListener('change', function() {
@@ -196,6 +219,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    preserveSoftBreaksToggle.addEventListener('change', function() {
+        const enabled = this.checked;
+
+        setPreserveSoftBreaks(enabled);
+        chromeApi?.storage?.sync?.set({[PRESERVE_SOFT_LINE_BREAKS_KEY]: enabled});
+        sendActiveTabMessage({
+            type: 'updatePreserveSoftLineBreaks',
+            value: enabled
+        });
+    });
+
     resetButton?.addEventListener('click', function() {
         applySettings(defaultSettings);
 
@@ -216,6 +250,10 @@ document.addEventListener('DOMContentLoaded', function() {
             sendActiveTabMessage({
                 type: 'updatePreviewTheme',
                 value: defaultSettings[PREVIEW_THEME_KEY]
+            });
+            sendActiveTabMessage({
+                type: 'updatePreserveSoftLineBreaks',
+                value: defaultSettings[PRESERVE_SOFT_LINE_BREAKS_KEY]
             });
             loadSettings();
         });

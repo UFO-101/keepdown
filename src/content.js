@@ -16,6 +16,7 @@ import {
     DEFAULT_EDITOR_MODAL_WIDTH,
     DEFAULT_MARKDOWN_ENABLED_KEY,
     DEFAULT_MARKDOWN_MODAL_WIDTH,
+    DEFAULT_PRESERVE_SOFT_LINE_BREAKS,
     DEFAULT_PREVIEW_THEME,
     EDITOR_MODAL_WIDTH_KEY,
     EXTENSION_OWNED_SELECTOR,
@@ -27,6 +28,7 @@ import {
     NOTE_MARKDOWN_MODE_PREFIX,
     NOTE_SOURCE_COLUMN_SELECTOR,
     PIN_BUTTON_SELECTOR,
+    PRESERVE_SOFT_LINE_BREAKS_KEY,
     PREVIEW_THEME_DARK,
     PREVIEW_THEME_KEY,
     PREVIEW_THEME_LIGHT,
@@ -51,6 +53,9 @@ let defaultMarkdownEnabled = true;
 
 // Current synced preview theme for markdown panels.
 let currentPreviewTheme = DEFAULT_PREVIEW_THEME;
+
+// Current synced paragraph line break preference for markdown panels.
+let preserveSoftLineBreaks = DEFAULT_PRESERVE_SOFT_LINE_BREAKS;
 
 // Guards document-wide modal scans so multiple mutations collapse into one pass.
 let scanScheduled = false;
@@ -123,6 +128,17 @@ function applyPreviewTheme(theme = currentPreviewTheme) {
     root.style.setProperty('--keep-md-preview-muted', tokens.muted);
     root.style.setProperty('--keep-md-preview-link', tokens.link);
     root.style.setProperty('--keep-md-preview-shadow', tokens.shadow);
+}
+
+// Applies the paragraph white-space mode used by markdown preview blocks.
+function applySoftLineBreakPreference(enabled = preserveSoftLineBreaks) {
+    const root = document.documentElement;
+
+    preserveSoftLineBreaks = enabled === true;
+    root.style.setProperty(
+        '--keep-md-preview-paragraph-white-space',
+        preserveSoftLineBreaks ? 'pre-line' : 'normal'
+    );
 }
 
 // Validates values loaded from storage before applying them to the note.
@@ -849,6 +865,11 @@ chrome.runtime.onMessage.addListener((message) => {
 
     if (message.type === 'updatePreviewTheme') {
         applyPreviewTheme(message.value);
+        return;
+    }
+
+    if (message.type === 'updatePreserveSoftLineBreaks') {
+        applySoftLineBreakPreference(message.value);
     }
 });
 
@@ -887,6 +908,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
             applyPreviewTheme(changes[PREVIEW_THEME_KEY].newValue);
         }
 
+        if (changes[PRESERVE_SOFT_LINE_BREAKS_KEY]) {
+            applySoftLineBreakPreference(changes[PRESERVE_SOFT_LINE_BREAKS_KEY].newValue);
+        }
+
         return;
     }
 
@@ -923,13 +948,16 @@ function init() {
         EDITOR_MODAL_WIDTH_KEY,
         MARKDOWN_MODAL_WIDTH_KEY,
         DEFAULT_MARKDOWN_ENABLED_KEY,
-        PREVIEW_THEME_KEY
+        PREVIEW_THEME_KEY,
+        PRESERVE_SOFT_LINE_BREAKS_KEY
     ], function(result) {
         currentEditorModalWidth = normalizeModalWidth(result[EDITOR_MODAL_WIDTH_KEY], DEFAULT_EDITOR_MODAL_WIDTH);
         currentMarkdownModalWidth = normalizeModalWidth(result[MARKDOWN_MODAL_WIDTH_KEY], DEFAULT_MARKDOWN_MODAL_WIDTH);
         defaultMarkdownEnabled = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
         currentPreviewTheme = normalizePreviewTheme(result[PREVIEW_THEME_KEY]);
+        preserveSoftLineBreaks = result[PRESERVE_SOFT_LINE_BREAKS_KEY] === true;
         applyPreviewTheme(currentPreviewTheme);
+        applySoftLineBreakPreference(preserveSoftLineBreaks);
         updateModalDimensions();
         scanOpenModals();
     });

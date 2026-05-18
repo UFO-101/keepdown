@@ -21,6 +21,7 @@
             --preview-border: #5f6368;
             --preview-link: #8ab4f8;
             --preview-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            --preview-copy-white-space: normal;
         }
 
         body[data-preview-theme="light"] {
@@ -31,6 +32,10 @@
             --preview-border: #d7dce5;
             --preview-link: #1a73e8;
             --preview-shadow: 0 10px 24px rgba(32, 33, 36, 0.08);
+        }
+
+        body[data-preserve-soft-breaks="true"] {
+            --preview-copy-white-space: pre-line;
         }
 
         * {
@@ -250,6 +255,7 @@
             color: var(--preview-muted);
             font-size: 12px;
             line-height: 1.55;
+            white-space: var(--preview-copy-white-space);
         }
 
         .preview-inline-code {
@@ -367,7 +373,7 @@
         }
     </style>
 </head>
-<body data-preview-theme="dark">
+<body data-preview-theme="dark" data-preserve-soft-breaks="false">
     <main class="panel">
         <header class="header">
             <img class="logo" src="icons/KeepDown_Logo_64x64.png" alt="">
@@ -409,11 +415,24 @@
                         <div class="preview-card">
                             <div class="preview-card-title">Weekly Notes</div>
                             <div class="preview-card-copy">
-                                Review tasks, open <span class="preview-inline-link">links</span>, and keep inline
-                                <span class="preview-inline-code">code</span> easy to scan.
+                                Review tasks, open <span class="preview-inline-link">links</span>, and keep inline <span class="preview-inline-code">code</span> easy to scan.
+Open the terminal and run the next command on a new line.
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div class="setting">
+                <div class="setting-row">
+                    <div>
+                        <label class="setting-title" for="preserve-soft-breaks">Preserve soft line breaks</label>
+                        <div class="setting-note">Show single line breaks inside normal paragraphs instead of collapsing them into one line.</div>
+                    </div>
+                    <label class="switch" title="Preserve soft line breaks">
+                        <input type="checkbox" id="preserve-soft-breaks">
+                        <span class="switch-track"></span>
+                    </label>
                 </div>
             </div>
 

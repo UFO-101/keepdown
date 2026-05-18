@@ -32340,6 +32340,9 @@
   // Synced setting key for the markdown preview theme.
   const PREVIEW_THEME_KEY = 'previewTheme';
 
+  // Synced setting key for preserving soft line breaks in paragraphs.
+  const PRESERVE_SOFT_LINE_BREAKS_KEY = 'preserveSoftLineBreaks';
+
   // Local setting prefix for per-note view mode overrides.
   const NOTE_MARKDOWN_MODE_PREFIX = 'noteMarkdownMode:';
 
@@ -32366,6 +32369,9 @@
 
   // Default preview theme used for new installs and resets.
   const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
+
+  // Default behavior keeps CommonMark soft line breaks collapsed.
+  const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;
 
   // Editor-only view mode.
   const VIEW_MODE_EDITOR = 'editor';
@@ -32402,6 +32408,9 @@
 
   // Current synced preview theme for markdown panels.
   let currentPreviewTheme = DEFAULT_PREVIEW_THEME;
+
+  // Current synced paragraph line break preference for markdown panels.
+  let preserveSoftLineBreaks = DEFAULT_PRESERVE_SOFT_LINE_BREAKS;
 
   // Guards document-wide modal scans so multiple mutations collapse into one pass.
   let scanScheduled = false;
@@ -32474,6 +32483,17 @@
       root.style.setProperty('--keep-md-preview-muted', tokens.muted);
       root.style.setProperty('--keep-md-preview-link', tokens.link);
       root.style.setProperty('--keep-md-preview-shadow', tokens.shadow);
+  }
+
+  // Applies the paragraph white-space mode used by markdown preview blocks.
+  function applySoftLineBreakPreference(enabled = preserveSoftLineBreaks) {
+      const root = document.documentElement;
+
+      preserveSoftLineBreaks = enabled === true;
+      root.style.setProperty(
+          '--keep-md-preview-paragraph-white-space',
+          preserveSoftLineBreaks ? 'pre-line' : 'normal'
+      );
   }
 
   // Validates values loaded from storage before applying them to the note.
@@ -33200,6 +33220,11 @@
 
       if (message.type === 'updatePreviewTheme') {
           applyPreviewTheme(message.value);
+          return;
+      }
+
+      if (message.type === 'updatePreserveSoftLineBreaks') {
+          applySoftLineBreakPreference(message.value);
       }
   });
 
@@ -33238,6 +33263,10 @@
               applyPreviewTheme(changes[PREVIEW_THEME_KEY].newValue);
           }
 
+          if (changes[PRESERVE_SOFT_LINE_BREAKS_KEY]) {
+              applySoftLineBreakPreference(changes[PRESERVE_SOFT_LINE_BREAKS_KEY].newValue);
+          }
+
           return;
       }
 
@@ -33274,13 +33303,16 @@
           EDITOR_MODAL_WIDTH_KEY,
           MARKDOWN_MODAL_WIDTH_KEY,
           DEFAULT_MARKDOWN_ENABLED_KEY,
-          PREVIEW_THEME_KEY
+          PREVIEW_THEME_KEY,
+          PRESERVE_SOFT_LINE_BREAKS_KEY
       ], function(result) {
           currentEditorModalWidth = normalizeModalWidth(result[EDITOR_MODAL_WIDTH_KEY], DEFAULT_EDITOR_MODAL_WIDTH);
           currentMarkdownModalWidth = normalizeModalWidth(result[MARKDOWN_MODAL_WIDTH_KEY], DEFAULT_MARKDOWN_MODAL_WIDTH);
           defaultMarkdownEnabled = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
           currentPreviewTheme = normalizePreviewTheme(result[PREVIEW_THEME_KEY]);
+          preserveSoftLineBreaks = result[PRESERVE_SOFT_LINE_BREAKS_KEY] === true;
           applyPreviewTheme(currentPreviewTheme);
+          applySoftLineBreakPreference(preserveSoftLineBreaks);
           updateModalDimensions();
           scanOpenModals();
       });
