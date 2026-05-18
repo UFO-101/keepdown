@@ -1,36 +1,251 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
     <style>
+        :root {
+            color-scheme: light;
+            --bg: #f7f8fb;
+            --panel: #ffffff;
+            --ink: #202124;
+            --muted: #6b7280;
+            --line: #e6e8ee;
+            --accent: #fbbc04;
+            --accent-strong: #e4a600;
+            --track: #dfe3eb;
+            --shadow: 0 18px 45px rgba(32, 33, 36, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            width: 300px;
+            width: 332px;
+            margin: 0;
+            padding: 14px;
+            background:
+                linear-gradient(135deg, rgba(251, 188, 4, 0.2), transparent 34%),
+                var(--bg);
+            color: var(--ink);
+            font-family: "Google Sans", "Segoe UI", system-ui, sans-serif;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid rgba(32, 33, 36, 0.08);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             padding: 16px;
-            font-family: 'Google Sans', Roboto, Arial, sans-serif;
+            border-bottom: 1px solid var(--line);
         }
-        .slider-container {
-            margin: 16px 0;
+
+        .logo {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
         }
-        label {
+
+        h1 {
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.2;
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+
+        .subtitle {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.2;
+        }
+
+        .settings {
+            display: grid;
+            gap: 12px;
+            padding: 14px;
+        }
+
+        .setting {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 13px;
+            background: #ffffff;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        .setting-title {
             display: block;
-            margin-bottom: 8px;
-            color: #333;
+            margin: 0;
+            color: var(--ink);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0;
         }
+
+        .setting-note {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.35;
+        }
+
+        .value-badge {
+            min-width: 56px;
+            padding: 5px 8px;
+            border-radius: 999px;
+            background: #202124;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 700;
+            text-align: center;
+        }
+
         input[type="range"] {
             width: 100%;
+            height: 28px;
+            margin: 12px 0 0;
+            background: transparent;
+            accent-color: var(--accent);
+            cursor: pointer;
         }
-        .value-display {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 4px;
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 6px;
+            border-radius: 999px;
+            background:
+                linear-gradient(90deg, var(--accent) var(--slider-progress, 56%), var(--track) 0);
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            width: 18px;
+            height: 18px;
+            margin-top: -6px;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            background: var(--accent-strong);
+            box-shadow: 0 3px 10px rgba(32, 33, 36, 0.22);
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-moz-range-track {
+            height: 6px;
+            border-radius: 999px;
+            background: var(--track);
+        }
+
+        input[type="range"]::-moz-range-progress {
+            height: 6px;
+            border-radius: 999px;
+            background: var(--accent);
+        }
+
+        .range-scale {
+            display: flex;
+            justify-content: space-between;
+            color: var(--muted);
+            font-size: 10px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-flex;
+            flex: 0 0 auto;
+            width: 46px;
+            height: 26px;
+        }
+
+        .switch input {
+            position: absolute;
+            opacity: 0;
+        }
+
+        .switch-track {
+            width: 100%;
+            height: 100%;
+            border-radius: 999px;
+            background: #d7dce5;
+            transition: background 160ms ease;
+        }
+
+        .switch-track::after {
+            content: "";
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 2px 6px rgba(32, 33, 36, 0.22);
+            transition: transform 160ms ease;
+        }
+
+        .switch input:checked + .switch-track {
+            background: var(--accent);
+        }
+
+        .switch input:checked + .switch-track::after {
+            transform: translateX(20px);
+        }
+
+        .switch input:focus-visible + .switch-track,
+        input[type="range"]:focus-visible {
+            outline: 2px solid #1a73e8;
+            outline-offset: 3px;
         }
     </style>
 </head>
 <body>
-    <div class="slider-container">
-        <label for="width">Modal Width (%)</label>
-        <input type="range" id="width" min="50" max="95" value="75">
-        <div class="value-display">Current: <span id="width-value">75</span>%</div>
-    </div>
+    <main class="panel">
+        <header class="header">
+            <img class="logo" src="icons/KeepDown_Logo_64x64.png" alt="">
+            <div>
+                <h1>KeepDown</h1>
+                <div class="subtitle">Google Keep Markdown</div>
+            </div>
+        </header>
+
+        <section class="settings">
+            <div class="setting">
+                <div class="setting-row">
+                    <label class="setting-title" for="default-markdown">Markdown by default</label>
+                    <label class="switch" title="Markdown by default">
+                        <input type="checkbox" id="default-markdown" checked>
+                        <span class="switch-track"></span>
+                    </label>
+                </div>
+                <div class="setting-note">Newly opened notes show the preview unless that note has its own setting.</div>
+            </div>
+
+            <div class="setting">
+                <div class="setting-row">
+                    <label class="setting-title" for="width">Modal width</label>
+                    <output class="value-badge" id="width-value" for="width">75%</output>
+                </div>
+                <input type="range" id="width" min="50" max="95" value="75">
+                <div class="range-scale">
+                    <span>50%</span>
+                    <span>95%</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
     <script src="popup.js"></script>
 </body>
 </html>

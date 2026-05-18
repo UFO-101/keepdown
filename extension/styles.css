@@ -11,6 +11,68 @@
     flex: 1;
 }
 
+.keep-md-toggle {
+    position: absolute !important;
+    right: 48px !important;
+    top: 6px !important;
+    z-index: 201 !important;
+    display: block !important;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 50% !important;
+    color: #5f6368 !important;
+    opacity: 0;
+    cursor: pointer !important;
+    transition: opacity .218s ease-in, background-color 120ms ease, color 120ms ease;
+}
+
+.keep-md-toggle::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    display: block;
+    width: 20px;
+    height: 20px;
+    background: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='24' viewBox='0 -960 960 960' width='24'%3E%3Cpath d='M180-240q-24.75 0-42.37-17.63Q120-275.25 120-300v-360q0-24.75 17.63-42.38Q155.25-720 180-720h600q24.75 0 42.38 17.62Q840-684.75 840-660v360q0 24.75-17.62 42.37Q804.75-240 780-240H180Zm0-60h600v-360H180v360Zm70-80h70v-130l55 70 55-70v130h70v-200h-70l-55 75-55-75h-70v200Zm420 0 100-100-100-100v65h-90v70h90v65ZM180-660v360-360Z'/%3E%3C/svg%3E") center / contain no-repeat;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='24' viewBox='0 -960 960 960' width='24'%3E%3Cpath d='M180-240q-24.75 0-42.37-17.63Q120-275.25 120-300v-360q0-24.75 17.63-42.38Q155.25-720 180-720h600q24.75 0 42.38 17.62Q840-684.75 840-660v360q0 24.75-17.62 42.37Q804.75-240 780-240H180Zm0-60h600v-360H180v360Zm70-80h70v-130l55 70 55-70v130h70v-200h-70l-55 75-55-75h-70v200Zm420 0 100-100-100-100v65h-90v70h90v65ZM180-660v360-360Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.XKSfm-L9AdLc .IZ65Hb-n0tgWb .keep-md-toggle,
+.h1U9Be-xhiy4 .IZ65Hb-n0tgWb .keep-md-toggle,
+.IZ65Hb-n0tgWb.cb6R2e-AHmuwe .keep-md-toggle {
+    top: 12px !important;
+    right: 48px !important;
+    opacity: .71;
+}
+
+.keep-md-toggle:hover {
+    background: rgba(95, 99, 104, 0.12) !important;
+}
+
+.keep-md-toggle.is-active {
+    color: #202124 !important;
+    background: rgba(251, 188, 4, 0.22) !important;
+}
+
+.keep-md-toggle.is-active::after {
+    content: "";
+    position: absolute;
+    right: 7px;
+    bottom: 7px;
+    width: 6px;
+    height: 6px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    background: #188038;
+}
+
+.keep-md-toggle:focus-visible {
+    outline: 2px solid #1a73e8 !important;
+    outline-offset: 2px !important;
+}
+
 .keep-md-preview {
     flex: 1;
     min-width: 0;
