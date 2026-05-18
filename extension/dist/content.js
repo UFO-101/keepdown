@@ -32467,9 +32467,20 @@
       return normalizedWidth;
   }
 
-  // Ignore mutations caused by our own injected DOM so preview rendering does not re-trigger scans.
+  // Ignore extension-owned DOM and class churn on managed modals so scans only run for real Keep changes.
   function shouldIgnoreModalScan(mutations) {
-      return shouldIgnoreMutations(mutations, EXTENSION_OWNED_SELECTOR);
+      return mutations.length > 0 && mutations.every((mutation) => {
+          if (
+              mutation.type === 'attributes' &&
+              mutation.attributeName === 'class' &&
+              mutation.target.matches?.(MODAL_SELECTOR) &&
+              modalContexts.has(mutation.target)
+          ) {
+              return true;
+          }
+
+          return shouldIgnoreMutations([mutation], EXTENSION_OWNED_SELECTOR);
+      });
   }
 
   // Loads the per-note mode override or falls back to the global default behavior.
@@ -32951,14 +32962,8 @@
 
   // Initializes or refreshes extension state for a Keep note modal.
   async function handleNoteOpen(modalNote) {
-      console.log('Modal opened:', modalNote);
-
       const existingContext = modalContexts.get(modalNote);
       if (existingContext) {
-          if (existingContext.preview?.isConnected) {
-              console.log('Preview already exists');
-          }
-
           const currentParts = getCurrentModalParts(modalNote);
           if (isContextStale(existingContext, currentParts)) {
               rebuildContext(existingContext);
@@ -32971,7 +32976,6 @@
 
       const currentParts = getCurrentModalParts(modalNote);
       if (!currentParts) {
-          console.log('No note content found');
           return;
       }
 
@@ -33205,34 +33209,13 @@
           currentMarkdownModalWidth = normalizeModalWidth(result[MARKDOWN_MODAL_WIDTH_KEY], DEFAULT_MARKDOWN_MODAL_WIDTH);
           defaultMarkdownEnabled = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
           updateModalDimensions();
-          if (document.querySelector(MODAL_SELECTOR)) {
-              console.log('Found existing modal');
-          }
-
           scanOpenModals();
       });
 
       // Watch for Keep opening or rebuilding note modals.
       const observer = new MutationObserver((mutations) => {
-          console.log('Mutation detected:', mutations.length, 'changes');
-
           if (shouldIgnoreModalScan(mutations)) {
               return;
-          }
-
-          for (const mutation of mutations) {
-              for (const node of mutation.addedNodes) {
-                  if (node.classList?.contains(MODAL_SELECTOR.slice(1))) {
-                      console.log('Modal added:', node);
-                  }
-              }
-
-              if (
-                  mutation.type === 'attributes' &&
-                  mutation.target.classList?.contains(MODAL_SELECTOR.slice(1))
-              ) {
-                  console.log('Modal attributes changed:', mutation.target);
-              }
           }
 
           scheduleModalScan();
