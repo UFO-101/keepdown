@@ -11,6 +11,7 @@
     flex: 1;
 }
 
+/* View mode controls injected before Keep's pin button. */
 .keep-md-view-controls {
     position: absolute !important;
     right: 48px !important;
@@ -32,6 +33,7 @@
     opacity: .71;
 }
 
+/* Keep-style circular icon buttons for Editor / Split / Preview. */
 .keep-md-view-button {
     position: relative !important;
     display: block !important;
@@ -89,6 +91,7 @@
     outline-offset: 2px !important;
 }
 
+/* Right-edge modal resize handle. */
 .keep-md-resize-handle {
     position: absolute !important;
     right: 0 !important;
@@ -144,6 +147,7 @@ html.keep-md-is-resizing * {
     user-select: none !important;
 }
 
+/* Markdown preview panel. */
 .keep-md-preview {
     flex: 1;
     min-width: 0;
@@ -238,10 +242,12 @@ html.keep-md-is-resizing * {
     overflow: visible !important;
 }
 
+/* Editor-only modal width. */
 .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-editor {
     width: 64vw !important;
 }
 
+/* Shared modal width for Editor and Preview / Preview modes. */
 .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split,
 .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-preview {
     width: 75vw !important;

@@ -1,5 +1,10 @@
+// Synced setting key for editor-only modal width.
 const EDITOR_MODAL_WIDTH_KEY = 'editorModalWidth';
+
+// Synced setting key for markdown preview modal width.
 const MARKDOWN_MODAL_WIDTH_KEY = 'markdownModalWidth';
+
+// Synced setting key for the global default markdown behavior.
 const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -20,6 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     ];
 
+    // Keep the range fill and value badge in sync.
     function updateWidthDisplay(control, value) {
         const numericValue = Number(value);
         const min = Number(control.slider.min);
@@ -52,6 +58,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Load saved settings.
     if (chromeApi?.storage?.sync) {
         chromeApi.storage.sync.get([
             EDITOR_MODAL_WIDTH_KEY,
@@ -70,6 +77,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Save width changes and notify the content script immediately.
     for (const control of widthControls) {
         control.slider.addEventListener('input', function() {
             const value = this.value;
@@ -84,6 +92,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Keep the popup synchronized when the in-note resize handle updates storage.
     chromeApi?.storage?.onChanged?.addListener(function(changes, areaName) {
         if (areaName !== 'sync') {
             return;

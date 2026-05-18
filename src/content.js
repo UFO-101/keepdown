@@ -1,161 +1,115 @@
 import {micromark} from 'micromark';
 import {gfm, gfmHtml} from 'micromark-extension-gfm';
 import {math, mathHtml} from 'micromark-extension-math';
+import {
+    clampNumber,
+    findFirstMatchingElement,
+    getLocalStorage,
+    getMarkdownText,
+    getSyncStorage,
+    hasOwn,
+    setLocalStorage,
+    setSyncStorage,
+    shouldIgnoreMutations
+} from './utils.js';
+import {
+    DEFAULT_EDITOR_MODAL_WIDTH,
+    DEFAULT_MARKDOWN_ENABLED_KEY,
+    DEFAULT_MARKDOWN_MODAL_WIDTH,
+    EDITOR_MODAL_WIDTH_KEY,
+    EXTENSION_OWNED_SELECTOR,
+    MARKDOWN_MODAL_WIDTH_KEY,
+    MAX_MODAL_WIDTH,
+    MIN_MODAL_WIDTH,
+    MODAL_SELECTOR,
+    NOTE_CONTENT_SELECTORS,
+    NOTE_MARKDOWN_MODE_PREFIX,
+    NOTE_SOURCE_COLUMN_SELECTOR,
+    PIN_BUTTON_SELECTOR,
+    VIEW_MODE_EDITOR,
+    VIEW_MODE_LABELS,
+    VIEW_MODE_PREVIEW,
+    VIEW_MODE_SPLIT,
+    VIEW_MODES
+} from './constants.js';
 
-const MODAL_SELECTOR = '.VIpgJd-TUo6Hb';
-const NOTE_CONTENT_SELECTORS = [
-    '.h1U9Be-YPqjbf',
-    '.IZ65Hb-vIzZGf-L9AdLc-haAclf',
-    '.IZ65Hb-qJTHM-haAclf [role="combobox"]',
-    '.IZ65Hb-qJTHM-haAclf [role="textbox"]:not([aria-label="Title"])',
-    '[contenteditable="true"][aria-multiline="true"][role="textbox"]:not([aria-label="Title"])'
-];
-const NOTE_SOURCE_COLUMN_SELECTOR = '.IZ65Hb-qJTHM-haAclf, .fmcmS-h1U9Be-LS81yb';
-const PIN_BUTTON_SELECTOR = '.IZ65Hb-s2gQvd > [aria-label="Pin note"], .IZ65Hb-s2gQvd > .IZ65Hb-nQ1Faf';
-const EDITOR_MODAL_WIDTH_KEY = 'editorModalWidth';
-const MARKDOWN_MODAL_WIDTH_KEY = 'markdownModalWidth';
-const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
-const NOTE_MARKDOWN_MODE_PREFIX = 'noteMarkdownMode:';
-const DEFAULT_EDITOR_MODAL_WIDTH = 64;
-const DEFAULT_MARKDOWN_MODAL_WIDTH = 75;
-const MIN_MODAL_WIDTH = 50;
-const MAX_MODAL_WIDTH = 95;
-const VIEW_MODE_EDITOR = 'editor';
-const VIEW_MODE_SPLIT = 'split';
-const VIEW_MODE_PREVIEW = 'preview';
-const VIEW_MODES = [VIEW_MODE_EDITOR, VIEW_MODE_SPLIT, VIEW_MODE_PREVIEW];
-const VIEW_MODE_LABELS = {
-    [VIEW_MODE_EDITOR]: 'Editor',
-    [VIEW_MODE_SPLIT]: 'Editor and Preview',
-    [VIEW_MODE_PREVIEW]: 'Preview'
-};
+console.log('Keep Markdown extension loaded!');
 
+// Current synced modal width for editor-only mode.
 let currentEditorModalWidth = DEFAULT_EDITOR_MODAL_WIDTH;
+
+// Current synced modal width for modes that include markdown preview.
 let currentMarkdownModalWidth = DEFAULT_MARKDOWN_MODAL_WIDTH;
+
+// Global default for opening notes in markdown mode.
 let defaultMarkdownEnabled = true;
+
+// Guards document-wide modal scans so multiple mutations collapse into one pass.
 let scanScheduled = false;
 
+// Stores one live context per Keep modal element.
 const modalContexts = new WeakMap();
+
+// Iterable set of live modal contexts for cleanup and storage sync updates.
 const modalContextSet = new Set();
 
-function hasOwn(object, key) {
-    return Object.prototype.hasOwnProperty.call(object, key);
-}
-
-function getSyncStorage(keys) {
-    return new Promise((resolve) => {
-        chrome.storage.sync.get(keys, resolve);
-    });
-}
-
-function setSyncStorage(items) {
-    return new Promise((resolve) => {
-        chrome.storage.sync.set(items, resolve);
-    });
-}
-
-function getLocalStorage(keys) {
-    return new Promise((resolve) => {
-        chrome.storage.local.get(keys, resolve);
-    });
-}
-
-function setLocalStorage(items) {
-    return new Promise((resolve) => {
-        chrome.storage.local.set(items, resolve);
-    });
-}
-
-function findMatchingElement(root, selector) {
-    if (root.matches?.(selector)) {
-        return root;
-    }
-
-    return root.querySelector(selector);
-}
-
+// Google Keep's editor markup changes often, so selectors are tried from oldest to newest.
 function findNoteContent(root) {
-    for (const selector of NOTE_CONTENT_SELECTORS) {
-        const element = findMatchingElement(root, selector);
-        if (element) {
-            return {element, selector};
-        }
-    }
-
-    return null;
+    return findFirstMatchingElement(root, NOTE_CONTENT_SELECTORS);
 }
 
+// Finds the Keep layout column that owns the editor node.
 function getSourceColumn(noteContent) {
     return noteContent.closest(NOTE_SOURCE_COLUMN_SELECTOR) || noteContent;
 }
 
-function getText(element) {
-    return (element?.innerText || element?.textContent || '').trim();
-}
-
-function getLineText(element) {
-    return (element.textContent || '')
-        .replace(/\u00a0/g, ' ')
-        .replace(/\r?\n|\r/g, '')
-        .trimEnd();
-}
-
-function getMarkdownText(noteContent) {
-    const lineElements = noteContent.querySelectorAll('p, div[role="presentation"]');
-    const text = lineElements.length > 0
-        ? Array.from(lineElements, getLineText).join('\n')
-        : getText(noteContent);
-
-    return text
-        .replace(/\u00a0/g, ' ')
-        .replace(/^"(.*)"$/gm, '$1')
-        .replace(/\\n/g, '\n')
-        .replace(/\\"([^"]+)\\"/g, '"$1"')
-        .trim();
-}
-
+// Keep exposes a stable note id in the URL hash while a note is open.
 function getLocationNoteKey() {
     const match = window.location.hash.match(/^#(?:NOTE|LIST)\/([^/?#&]+)/i);
     return match?.[1] ? `hash:${match[1]}` : null;
 }
 
+// Returns the default mode to use when a note has no per-note override.
 function getDefaultViewMode() {
     return defaultMarkdownEnabled ? VIEW_MODE_SPLIT : VIEW_MODE_EDITOR;
 }
 
+// Validates values loaded from storage before applying them to the note.
 function isValidViewMode(mode) {
     return VIEW_MODES.includes(mode);
 }
 
+// Builds the per-note local storage key for view mode persistence.
 function getNoteModeStorageKey(noteKey) {
     return noteKey ? `${NOTE_MARKDOWN_MODE_PREFIX}${noteKey}` : null;
 }
 
+// Editor mode and markdown modes intentionally keep separate modal width preferences.
 function normalizeModalWidth(width, fallback) {
-    const numericWidth = Number(width);
-    if (!Number.isFinite(numericWidth)) {
-        return fallback;
-    }
-
-    return Math.min(MAX_MODAL_WIDTH, Math.max(MIN_MODAL_WIDTH, Math.round(numericWidth)));
+    return clampNumber(width, MIN_MODAL_WIDTH, MAX_MODAL_WIDTH, fallback);
 }
 
+// Maps note view modes to the width preference bucket they should use.
 function getModalWidthTarget(mode) {
     return mode === VIEW_MODE_EDITOR ? 'editor' : 'markdown';
 }
 
+// Returns the synced storage key for a width preference bucket.
 function getModalWidthStorageKey(target) {
     return target === 'editor' ? EDITOR_MODAL_WIDTH_KEY : MARKDOWN_MODAL_WIDTH_KEY;
 }
 
+// Returns the current in-memory width for a width preference bucket.
 function getModalWidthForTarget(target) {
     return target === 'editor' ? currentEditorModalWidth : currentMarkdownModalWidth;
 }
 
+// Returns the current in-memory width used by a note view mode.
 function getModalWidthForMode(mode) {
     return getModalWidthForTarget(getModalWidthTarget(mode));
 }
 
+// Updates the active in-memory width and refreshes live modals.
 function setModalWidthForTarget(target, width) {
     const fallback = getModalWidthForTarget(target);
     const normalizedWidth = normalizeModalWidth(width, fallback);
@@ -172,39 +126,12 @@ function setModalWidthForTarget(target, width) {
     return normalizedWidth;
 }
 
-function getMutationElement(mutation) {
-    if (mutation.target.nodeType === Node.ELEMENT_NODE) {
-        return mutation.target;
-    }
-
-    return mutation.target.parentElement;
-}
-
-function isExtensionOwnedElement(element) {
-    return Boolean(element?.closest?.(
-        '.keep-md-preview, .keep-md-view-controls, .keep-md-resize-handle'
-    ));
-}
-
+// Ignore mutations caused by our own injected DOM so preview rendering does not re-trigger scans.
 function shouldIgnoreModalScan(mutations) {
-    return mutations.length > 0 && mutations.every((mutation) => {
-        if (isExtensionOwnedElement(getMutationElement(mutation))) {
-            return true;
-        }
-
-        const addedNodes = Array.from(mutation.addedNodes || []);
-        const removedNodes = Array.from(mutation.removedNodes || []);
-        const changedNodes = [...addedNodes, ...removedNodes];
-        return changedNodes.length > 0 && changedNodes.every((node) => {
-            if (node.nodeType !== Node.ELEMENT_NODE) {
-                return true;
-            }
-
-            return isExtensionOwnedElement(node);
-        });
-    });
+    return shouldIgnoreMutations(mutations, EXTENSION_OWNED_SELECTOR);
 }
 
+// Loads the per-note mode override or falls back to the global default behavior.
 async function loadViewModePreference(modeStorageKey) {
     const syncResult = await getSyncStorage([DEFAULT_MARKDOWN_ENABLED_KEY]);
     defaultMarkdownEnabled = syncResult[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
@@ -232,13 +159,17 @@ async function loadViewModePreference(modeStorageKey) {
     };
 }
 
+// Create preview panel.
 function createPreviewPanel(noteId) {
+    console.log('Creating preview panel:', noteId);
+
     const preview = document.createElement('div');
     preview.className = 'keep-md-preview';
     preview.id = `keep-md-preview-${noteId}`;
     return preview;
 }
 
+// Creates a single view mode button using Keep-style DOM attributes.
 function createViewModeButton(context, mode) {
     const button = document.createElement('div');
     button.className = `Q0hgme-LgbsSe Q0hgme-Bz112c-LgbsSe keep-md-view-button keep-md-view-${mode} VIpgJd-LgbsSe`;
@@ -249,6 +180,7 @@ function createViewModeButton(context, mode) {
     return button;
 }
 
+// Insert the Editor / Split / Preview buttons next to Keep's native pin control.
 function createViewModeControls(context) {
     const controls = document.createElement('div');
     controls.className = 'keep-md-view-controls';
@@ -288,10 +220,12 @@ function createViewModeControls(context) {
     return controls;
 }
 
+// Stops Keep's own delegated handlers from treating extension controls as note clicks.
 function stopKeepEvent(event) {
     event.stopPropagation();
 }
 
+// Ensures the mode switcher exists and stays anchored beside the pin button.
 function ensureViewModeControls(context) {
     if (context.viewControls?.isConnected) {
         updateViewModeControls(context);
@@ -311,6 +245,7 @@ function ensureViewModeControls(context) {
     updateViewModeControls(context);
 }
 
+// Create a right-edge resize handle that writes back to the active mode's width setting.
 function createResizeHandle(context) {
     const handle = document.createElement('button');
     handle.type = 'button';
@@ -340,6 +275,7 @@ function createResizeHandle(context) {
     return handle;
 }
 
+// Ensures the resize handle exists for the current modal context.
 function ensureResizeHandle(context) {
     if (!context.resizeHandle?.isConnected) {
         context.modalNote.querySelector('.keep-md-resize-handle')?.remove();
@@ -350,6 +286,7 @@ function ensureResizeHandle(context) {
     updateResizeHandle(context);
 }
 
+// Updates resize handle labels and ARIA value for the active note mode.
 function updateResizeHandle(context) {
     if (!context.resizeHandle) {
         return;
@@ -362,18 +299,21 @@ function updateResizeHandle(context) {
     context.resizeHandle.title = `Resize ${label} width`;
 }
 
+// Refreshes resize handle labels after settings change.
 function updateAllResizeHandles() {
     for (const context of modalContextSet) {
         updateResizeHandle(context);
     }
 }
 
+// Converts a pointer x-coordinate into centered viewport width percentage.
 function getWidthFromPointer(clientX) {
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
     const modalHalfWidth = clientX - (viewportWidth / 2);
     return (modalHalfWidth * 2 / viewportWidth) * 100;
 }
 
+// Handles drag resizing and persists the final width to sync storage.
 function startModalResize(context, event) {
     if (event.button !== undefined && event.button !== 0) {
         return;
@@ -422,6 +362,7 @@ function startModalResize(context, event) {
     document.addEventListener('pointercancel', finishResize, true);
 }
 
+// Allows keyboard users to adjust modal width with arrow keys.
 function resizeModalFromKeyboard(context, event) {
     const target = getModalWidthTarget(context.viewMode);
     const storageKey = getModalWidthStorageKey(target);
@@ -447,6 +388,7 @@ function resizeModalFromKeyboard(context, event) {
     setSyncStorage({[storageKey]: String(normalizedWidth)});
 }
 
+// Reflects the active view mode in button classes and accessibility labels.
 function updateViewModeControls(context) {
     if (!context.viewControls) {
         return;
@@ -467,6 +409,7 @@ function updateViewModeControls(context) {
     }
 }
 
+// Renders markdown into the preview panel when the source text changes.
 function updatePreview(context) {
     if (!context.preview) {
         return;
@@ -478,6 +421,7 @@ function updatePreview(context) {
     }
 
     const markdownText = getMarkdownText(latestNoteContentMatch.element);
+    // Avoid rewriting preview DOM when Keep re-scans the same unchanged note content.
     if (context.lastMarkdownText === markdownText && context.preview.hasChildNodes()) {
         return;
     }
@@ -489,7 +433,9 @@ function updatePreview(context) {
     });
 }
 
+// Creates the split layout and attaches the live markdown preview panel.
 function showMarkdownPreview(context) {
+    // If the preview already exists, only refresh its content.
     if (context.preview?.isConnected) {
         updatePreview(context);
         return;
@@ -500,18 +446,22 @@ function showMarkdownPreview(context) {
         return;
     }
 
+    // Create a flex container for side-by-side layout.
     const container = document.createElement('div');
     container.className = 'keep-md-container';
 
+    // Move the note content into the container.
     context.sourceColumn.classList.add('keep-md-source');
     parent.insertBefore(container, context.sourceColumn);
     container.appendChild(context.sourceColumn);
 
+    // Create preview.
     context.container = container;
     context.preview = createPreviewPanel(Date.now());
     context.lastMarkdownText = null;
     container.appendChild(context.preview);
 
+    // Watch for content changes.
     context.observer = new MutationObserver(() => {
         updatePreview(context);
     });
@@ -522,9 +472,12 @@ function showMarkdownPreview(context) {
         subtree: true
     });
 
+    // Initial render.
     updatePreview(context);
+    console.log('Preview added:', context.preview.id);
 }
 
+// Removes preview DOM and restores the editor column to Keep's modal tree.
 function removeMarkdownPreview(context) {
     if (context.observer) {
         context.observer.disconnect();
@@ -546,6 +499,7 @@ function removeMarkdownPreview(context) {
     context.lastMarkdownText = null;
 }
 
+// Applies mode-specific classes to the Keep modal for CSS targeting.
 function updateModalModeClasses(context) {
     context.modalNote.classList.add('keep-md-modal');
 
@@ -556,6 +510,7 @@ function updateModalModeClasses(context) {
     context.modalNote.dataset.keepMdViewMode = context.viewMode;
 }
 
+// Apply the selected view mode and keep the note-level controls in sync.
 function applyViewMode(context) {
     updateModalModeClasses(context);
     ensureResizeHandle(context);
@@ -575,6 +530,7 @@ function applyViewMode(context) {
     updateResizeHandle(context);
 }
 
+// Existing modal scans should not re-render markdown unless the editor DOM was rebuilt.
 function syncExistingContext(context) {
     updateModalModeClasses(context);
     ensureResizeHandle(context);
@@ -599,6 +555,7 @@ function syncExistingContext(context) {
     context.sourceColumn.classList.toggle('keep-md-source-hidden', isPreviewOnly);
 }
 
+// Persists a user-selected note mode and updates the live modal.
 async function setNoteViewMode(context, mode) {
     if (!isValidViewMode(mode)) {
         return;
@@ -613,6 +570,7 @@ async function setNoteViewMode(context, mode) {
     }
 }
 
+// Reads the current editor, layout column, and note key from a Keep modal.
 function getCurrentModalParts(modalNote) {
     const noteContentMatch = findNoteContent(modalNote);
     if (!noteContentMatch) {
@@ -626,6 +584,7 @@ function getCurrentModalParts(modalNote) {
     };
 }
 
+// Detects when Keep reused a modal shell but replaced the editor subtree.
 function isContextStale(context, currentParts) {
     if (!currentParts) {
         return !context.sourceColumn.isConnected || !context.modalNote.contains(context.sourceColumn);
@@ -640,6 +599,7 @@ function isContextStale(context, currentParts) {
         currentParts.sourceColumn !== context.sourceColumn;
 }
 
+// Tears down stale context state and reopens the modal from current DOM.
 function rebuildContext(context) {
     removeMarkdownPreview(context);
     context.viewControls?.remove();
@@ -648,9 +608,16 @@ function rebuildContext(context) {
     handleNoteOpen(context.modalNote);
 }
 
+// Initializes or refreshes extension state for a Keep note modal.
 async function handleNoteOpen(modalNote) {
+    console.log('Modal opened:', modalNote);
+
     const existingContext = modalContexts.get(modalNote);
     if (existingContext) {
+        if (existingContext.preview?.isConnected) {
+            console.log('Preview already exists');
+        }
+
         const currentParts = getCurrentModalParts(modalNote);
         if (isContextStale(existingContext, currentParts)) {
             rebuildContext(existingContext);
@@ -663,6 +630,7 @@ async function handleNoteOpen(modalNote) {
 
     const currentParts = getCurrentModalParts(modalNote);
     if (!currentParts) {
+        console.log('No note content found');
         return;
     }
 
@@ -701,6 +669,7 @@ async function handleNoteOpen(modalNote) {
     applyViewMode(context);
 }
 
+// Disconnects observers and removes extension-owned controls for a modal context.
 function destroyContext(context) {
     if (context.observer) {
         context.observer.disconnect();
@@ -718,6 +687,7 @@ function destroyContext(context) {
     modalContextSet.delete(context);
 }
 
+// Drops contexts whose Keep modal elements are no longer connected.
 function cleanupDisconnectedContexts() {
     for (const context of modalContextSet) {
         if (!context.modalNote.isConnected) {
@@ -726,7 +696,9 @@ function cleanupDisconnectedContexts() {
     }
 }
 
+// Rebuilds the injected modal style from the current width settings.
 function updateModalDimensions(widths = {}) {
+    // Update stored width values before regenerating the modal override style.
     if (hasOwn(widths, EDITOR_MODAL_WIDTH_KEY)) {
         currentEditorModalWidth = normalizeModalWidth(widths[EDITOR_MODAL_WIDTH_KEY], currentEditorModalWidth);
     }
@@ -737,6 +709,7 @@ function updateModalDimensions(widths = {}) {
 
     const style = document.createElement('style');
     style.textContent = `
+        /* Target the outer modal container. */
         .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal {
             position: fixed !important;
             height: auto !important;
@@ -747,15 +720,18 @@ function updateModalDimensions(widths = {}) {
             overflow: visible !important;
         }
 
+        /* Editor-only width. */
         .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-editor {
             width: ${currentEditorModalWidth}vw !important;
         }
 
+        /* Shared width for Editor and Preview / Preview modes. */
         .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split,
         .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-preview {
             width: ${currentMarkdownModalWidth}vw !important;
         }
 
+        /* Allow modal to scroll if content is very tall. */
         .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-n0tgWb,
         .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-TBnied,
         .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-s2gQvd,
@@ -769,11 +745,13 @@ function updateModalDimensions(widths = {}) {
             box-sizing: border-box !important;
         }
 
+        /* Container takes natural height. */
         .keep-md-container {
             height: auto !important;
         }
     `;
 
+    // Remove any previous style element we added.
     const existingStyle = document.getElementById('keep-md-modal-style');
     if (existingStyle) {
         existingStyle.remove();
@@ -783,6 +761,7 @@ function updateModalDimensions(widths = {}) {
     document.head.appendChild(style);
 }
 
+// Reapplies the global default mode to notes that do not have per-note overrides.
 function refreshDefaultMarkdownContexts() {
     cleanupDisconnectedContexts();
 
@@ -796,6 +775,7 @@ function refreshDefaultMarkdownContexts() {
     }
 }
 
+// Handles direct messages from the popup without waiting for storage change events.
 chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'updateModalWidths') {
         updateModalDimensions({
@@ -812,6 +792,7 @@ chrome.runtime.onMessage.addListener((message) => {
     }
 });
 
+// Synchronizes live modals when popup settings or note mode overrides change.
 chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'sync') {
         let dimensionsChanged = false;
@@ -869,7 +850,11 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     }
 });
 
+// Initializes settings, performs the first modal scan, and starts watching Keep DOM changes.
 function init() {
+    console.log('Initializing Keep Markdown');
+
+    // Load saved settings.
     chrome.storage.sync.get([
         EDITOR_MODAL_WIDTH_KEY,
         MARKDOWN_MODAL_WIDTH_KEY,
@@ -879,12 +864,34 @@ function init() {
         currentMarkdownModalWidth = normalizeModalWidth(result[MARKDOWN_MODAL_WIDTH_KEY], DEFAULT_MARKDOWN_MODAL_WIDTH);
         defaultMarkdownEnabled = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
         updateModalDimensions();
+        if (document.querySelector(MODAL_SELECTOR)) {
+            console.log('Found existing modal');
+        }
+
         scanOpenModals();
     });
 
+    // Watch for Keep opening or rebuilding note modals.
     const observer = new MutationObserver((mutations) => {
+        console.log('Mutation detected:', mutations.length, 'changes');
+
         if (shouldIgnoreModalScan(mutations)) {
             return;
+        }
+
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.classList?.contains(MODAL_SELECTOR.slice(1))) {
+                    console.log('Modal added:', node);
+                }
+            }
+
+            if (
+                mutation.type === 'attributes' &&
+                mutation.target.classList?.contains(MODAL_SELECTOR.slice(1))
+            ) {
+                console.log('Modal attributes changed:', mutation.target);
+            }
         }
 
         scheduleModalScan();
@@ -898,6 +905,7 @@ function init() {
     });
 }
 
+// Scans the document for currently open Keep note modals.
 function scanOpenModals() {
     cleanupDisconnectedContexts();
 
@@ -907,6 +915,7 @@ function scanOpenModals() {
     }
 }
 
+// Debounce document-wide scans into a single animation frame.
 function scheduleModalScan() {
     if (scanScheduled) {
         return;
