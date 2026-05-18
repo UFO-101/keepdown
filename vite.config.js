@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+    esbuild: {
+        drop: ['console', 'debugger']
+    },
     build: {
         outDir: 'extension/dist',
         rollupOptions: {

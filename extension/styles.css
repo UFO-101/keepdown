@@ -28,8 +28,8 @@
 }
 
 /* Make the note content take up half the space */
-.keep-md-container .h1U9Be-YPqjbf {
-    flex: 1;
+.keep-md-source {
+    flex: 1 1 0;
     margin: 0;
     min-width: 0;
 }

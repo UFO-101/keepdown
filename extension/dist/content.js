@@ -32184,14 +32184,53 @@
     }
   }
 
-  console.log('Keep Markdown extension loaded!');
+  const MODAL_SELECTOR = '.VIpgJd-TUo6Hb';
+  const NOTE_CONTENT_SELECTORS = [
+      '.h1U9Be-YPqjbf',
+      '.IZ65Hb-vIzZGf-L9AdLc-haAclf',
+      '.IZ65Hb-qJTHM-haAclf [role="combobox"]',
+      '.IZ65Hb-qJTHM-haAclf [role="textbox"]:not([aria-label="Title"])',
+      '[contenteditable="true"][aria-multiline="true"][role="textbox"]:not([aria-label="Title"])'
+  ];
+  const NOTE_SOURCE_COLUMN_SELECTOR = '.IZ65Hb-qJTHM-haAclf, .fmcmS-h1U9Be-LS81yb';
 
-  // Add this near the top of the file, after the imports
   let currentModalWidth = 75;  // Only keep width default
+  let scanScheduled = false;
+
+  function findMatchingElement(root, selector) {
+      if (root.matches?.(selector)) {
+          return root;
+      }
+
+      return root.querySelector(selector);
+  }
+
+  function findNoteContent(root) {
+      for (const selector of NOTE_CONTENT_SELECTORS) {
+          const element = findMatchingElement(root, selector);
+          if (element) {
+              return {element, selector};
+          }
+      }
+
+      return null;
+  }
+
+  function getSourceColumn(noteContent) {
+      return noteContent.closest(NOTE_SOURCE_COLUMN_SELECTOR) || noteContent;
+  }
+
+  function getMarkdownText(noteContent) {
+      return (noteContent.innerText || noteContent.textContent || '')
+          .replace(/\u00a0/g, ' ')
+          .replace(/^"(.*)"$/gm, '$1')    // Remove surrounding quotes
+          .replace(/\\n/g, '\n')          // Handle newlines
+          .replace(/\\"([^"]+)\\"/g, '"$1"') // Fix escaped quotes
+          .trim();
+  }
 
   // Create preview panel
   function createPreviewPanel(noteId) {
-      console.log('Creating preview panel:', noteId);
       const preview = document.createElement('div');
       preview.className = 'keep-md-preview';
       preview.id = `keep-md-preview-${noteId}`;
@@ -32199,18 +32238,22 @@
   }
 
   function handleNoteOpen(modalNote) {
-      console.log('Modal opened:', modalNote);
-      
       // Check if preview already exists
       if (modalNote.querySelector('.keep-md-preview')) {
-          console.log('Preview already exists');
           return;
       }
 
       // Find the note content within the modal
-      const noteContent = modalNote.querySelector('.h1U9Be-YPqjbf');
-      if (!noteContent) {
-          console.log('No note content found');
+      const noteContentMatch = findNoteContent(modalNote);
+      if (!noteContentMatch) {
+          return;
+      }
+
+      const noteContent = noteContentMatch.element;
+      const sourceColumn = getSourceColumn(noteContent);
+
+      const parent = sourceColumn.parentElement;
+      if (!parent) {
           return;
       }
 
@@ -32218,10 +32261,10 @@
       const container = document.createElement('div');
       container.className = 'keep-md-container';
       
-      // Move the note content into the container
-      const parent = noteContent.parentElement;
-      parent.insertBefore(container, noteContent);
-      container.appendChild(noteContent);
+      // Move the note content column into the container
+      sourceColumn.classList.add('keep-md-source');
+      parent.insertBefore(container, sourceColumn);
+      container.appendChild(sourceColumn);
 
       // Create preview
       const preview = createPreviewPanel(Date.now());
@@ -32229,11 +32272,12 @@
 
       // Function to update preview
       const updatePreview = () => {
-          const markdownText = noteContent.innerText
-              .replace(/^"(.*)"$/gm, '$1')    // Remove surrounding quotes
-              .replace(/\\n/g, '\n')          // Handle newlines
-              .replace(/\\"([^"]+)\\"/g, '"$1"') // Fix escaped quotes
-              .trim();
+          const latestNoteContentMatch = findNoteContent(sourceColumn) || findNoteContent(modalNote);
+          if (!latestNoteContentMatch) {
+              return;
+          }
+
+          const markdownText = getMarkdownText(latestNoteContentMatch.element);
           
           preview.innerHTML = micromark(markdownText, {
               extensions: [gfm(), math$1()],
@@ -32245,17 +32289,15 @@
       updatePreview();
 
       // Watch for content changes
-      const observer = new MutationObserver((mutations) => {
+      const observer = new MutationObserver(() => {
           updatePreview();
       });
 
-      observer.observe(noteContent, {
+      observer.observe(sourceColumn, {
           childList: true,
           characterData: true,
           subtree: true
       });
-
-      console.log('Preview added:', preview.id);
   }
 
   function updateModalDimensions(width) {
@@ -32304,41 +32346,17 @@
 
   // Initialize
   function init() {
-      console.log('Initializing Keep Markdown');
-      
       // Load saved width
       chrome.storage.sync.get(['modalWidth'], function(result) {
           if (result.modalWidth) currentModalWidth = result.modalWidth;
           updateModalDimensions();
       });
       
-      // First check if modal is already open
-      const existingModal = document.querySelector('.VIpgJd-TUo6Hb');
-      if (existingModal) {
-          console.log('Found existing modal');
-          handleNoteOpen(existingModal);
-      }
+      scanOpenModals();
 
       // Watch for changes to the entire document
-      const observer = new MutationObserver((mutations) => {
-          console.log('Mutation detected:', mutations.length, 'changes');
-          
-          for (const mutation of mutations) {
-              // Check added nodes
-              for (const node of mutation.addedNodes) {
-                  if (node.classList?.contains('VIpgJd-TUo6Hb')) {
-                      console.log('Modal added:', node);
-                      handleNoteOpen(node);
-                  }
-              }
-              
-              // Also check for attribute changes that might indicate modal opening
-              if (mutation.type === 'attributes' && 
-                  mutation.target.classList?.contains('VIpgJd-TUo6Hb')) {
-                  console.log('Modal attributes changed:', mutation.target);
-                  handleNoteOpen(mutation.target);
-              }
-          }
+      const observer = new MutationObserver(() => {
+          scheduleModalScan();
       });
 
       // Observe everything
@@ -32347,6 +32365,27 @@
           subtree: true,
           attributes: true,
           attributeFilter: ['class']
+      });
+  }
+
+  function scanOpenModals() {
+      const modals = Array.from(document.querySelectorAll(MODAL_SELECTOR))
+          .filter((modal) => !modal.querySelector('.keep-md-preview'));
+
+      for (const modal of modals) {
+          handleNoteOpen(modal);
+      }
+  }
+
+  function scheduleModalScan() {
+      if (scanScheduled) {
+          return;
+      }
+
+      scanScheduled = true;
+      requestAnimationFrame(() => {
+          scanScheduled = false;
+          scanOpenModals();
       });
   }
 
