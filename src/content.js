@@ -16,6 +16,7 @@ import {
     DEFAULT_EDITOR_MODAL_WIDTH,
     DEFAULT_MARKDOWN_ENABLED_KEY,
     DEFAULT_MARKDOWN_MODAL_WIDTH,
+    DEFAULT_PREVIEW_THEME,
     EDITOR_MODAL_WIDTH_KEY,
     EXTENSION_OWNED_SELECTOR,
     MARKDOWN_MODAL_WIDTH_KEY,
@@ -26,6 +27,10 @@ import {
     NOTE_MARKDOWN_MODE_PREFIX,
     NOTE_SOURCE_COLUMN_SELECTOR,
     PIN_BUTTON_SELECTOR,
+    PREVIEW_THEME_DARK,
+    PREVIEW_THEME_KEY,
+    PREVIEW_THEME_LIGHT,
+    PREVIEW_THEMES,
     VIEW_MODE_EDITOR,
     VIEW_MODE_LABELS,
     VIEW_MODE_PREVIEW,
@@ -44,6 +49,9 @@ let currentMarkdownModalWidth = DEFAULT_MARKDOWN_MODAL_WIDTH;
 // Global default for opening notes in markdown mode.
 let defaultMarkdownEnabled = true;
 
+// Current synced preview theme for markdown panels.
+let currentPreviewTheme = DEFAULT_PREVIEW_THEME;
+
 // Guards document-wide modal scans so multiple mutations collapse into one pass.
 let scanScheduled = false;
 
@@ -52,6 +60,28 @@ const modalContexts = new WeakMap();
 
 // Iterable set of live modal contexts for cleanup and storage sync updates.
 const modalContextSet = new Set();
+
+// Shared preview color tokens applied to Keep's live markdown panel.
+const PREVIEW_THEME_TOKENS = {
+    [PREVIEW_THEME_DARK]: {
+        background: '#2a2b2e',
+        text: '#e8eaed',
+        surface: '#303134',
+        border: '#5f6368',
+        muted: '#9aa0a6',
+        link: '#8ab4f8',
+        shadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+    },
+    [PREVIEW_THEME_LIGHT]: {
+        background: '#ffffff',
+        text: '#202124',
+        surface: '#f1f3f4',
+        border: '#d7dce5',
+        muted: '#5f6368',
+        link: '#1a73e8',
+        shadow: '0 10px 24px rgba(32, 33, 36, 0.08)'
+    }
+};
 
 // Google Keep's editor markup changes often, so selectors are tried from oldest to newest.
 function findNoteContent(root) {
@@ -72,6 +102,27 @@ function getLocationNoteKey() {
 // Returns the default mode to use when a note has no per-note override.
 function getDefaultViewMode() {
     return defaultMarkdownEnabled ? VIEW_MODE_SPLIT : VIEW_MODE_EDITOR;
+}
+
+// Validates preview themes loaded from storage before styling the preview panel.
+function normalizePreviewTheme(theme) {
+    return PREVIEW_THEMES.includes(theme) ? theme : DEFAULT_PREVIEW_THEME;
+}
+
+// Applies the active preview theme through CSS variables used by extension styles.
+function applyPreviewTheme(theme = currentPreviewTheme) {
+    const normalizedTheme = normalizePreviewTheme(theme);
+    const tokens = PREVIEW_THEME_TOKENS[normalizedTheme];
+    const root = document.documentElement;
+
+    currentPreviewTheme = normalizedTheme;
+    root.style.setProperty('--keep-md-preview-bg', tokens.background);
+    root.style.setProperty('--keep-md-preview-text', tokens.text);
+    root.style.setProperty('--keep-md-preview-surface', tokens.surface);
+    root.style.setProperty('--keep-md-preview-border', tokens.border);
+    root.style.setProperty('--keep-md-preview-muted', tokens.muted);
+    root.style.setProperty('--keep-md-preview-link', tokens.link);
+    root.style.setProperty('--keep-md-preview-shadow', tokens.shadow);
 }
 
 // Validates values loaded from storage before applying them to the note.
@@ -793,6 +844,11 @@ chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'updateDefaultMarkdownEnabled') {
         defaultMarkdownEnabled = message.value !== false;
         refreshDefaultMarkdownContexts();
+        return;
+    }
+
+    if (message.type === 'updatePreviewTheme') {
+        applyPreviewTheme(message.value);
     }
 });
 
@@ -825,6 +881,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         if (changes[DEFAULT_MARKDOWN_ENABLED_KEY]) {
             defaultMarkdownEnabled = changes[DEFAULT_MARKDOWN_ENABLED_KEY].newValue !== false;
             refreshDefaultMarkdownContexts();
+        }
+
+        if (changes[PREVIEW_THEME_KEY]) {
+            applyPreviewTheme(changes[PREVIEW_THEME_KEY].newValue);
         }
 
         return;
@@ -862,11 +922,14 @@ function init() {
     chrome.storage.sync.get([
         EDITOR_MODAL_WIDTH_KEY,
         MARKDOWN_MODAL_WIDTH_KEY,
-        DEFAULT_MARKDOWN_ENABLED_KEY
+        DEFAULT_MARKDOWN_ENABLED_KEY,
+        PREVIEW_THEME_KEY
     ], function(result) {
         currentEditorModalWidth = normalizeModalWidth(result[EDITOR_MODAL_WIDTH_KEY], DEFAULT_EDITOR_MODAL_WIDTH);
         currentMarkdownModalWidth = normalizeModalWidth(result[MARKDOWN_MODAL_WIDTH_KEY], DEFAULT_MARKDOWN_MODAL_WIDTH);
         defaultMarkdownEnabled = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
+        currentPreviewTheme = normalizePreviewTheme(result[PREVIEW_THEME_KEY]);
+        applyPreviewTheme(currentPreviewTheme);
         updateModalDimensions();
         scanOpenModals();
     });

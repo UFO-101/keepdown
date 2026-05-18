@@ -25,6 +25,9 @@ export const MARKDOWN_MODAL_WIDTH_KEY = 'markdownModalWidth';
 // Synced setting key for the global default markdown behavior.
 export const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
 
+// Synced setting key for the markdown preview theme.
+export const PREVIEW_THEME_KEY = 'previewTheme';
+
 // Local setting prefix for per-note view mode overrides.
 export const NOTE_MARKDOWN_MODE_PREFIX = 'noteMarkdownMode:';
 
@@ -39,6 +42,18 @@ export const MIN_MODAL_WIDTH = 50;
 
 // Maximum modal width allowed by sliders and drag handles.
 export const MAX_MODAL_WIDTH = 95;
+
+// Dark preview theme keeps the current KeepDown look.
+export const PREVIEW_THEME_DARK = 'dark';
+
+// Light preview theme matches Keep's brighter surfaces.
+export const PREVIEW_THEME_LIGHT = 'light';
+
+// Preview theme shown in popup settings.
+export const PREVIEW_THEMES = [PREVIEW_THEME_DARK, PREVIEW_THEME_LIGHT];
+
+// Default preview theme used for new installs and resets.
+export const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
 
 // Editor-only view mode.
 export const VIEW_MODE_EDITOR = 'editor';

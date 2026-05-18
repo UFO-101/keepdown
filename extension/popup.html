@@ -14,6 +14,23 @@
             --accent-strong: #e4a600;
             --track: #dfe3eb;
             --shadow: 0 18px 45px rgba(32, 33, 36, 0.14);
+            --preview-bg: #2a2b2e;
+            --preview-ink: #e8eaed;
+            --preview-surface: #303134;
+            --preview-muted: #9aa0a6;
+            --preview-border: #5f6368;
+            --preview-link: #8ab4f8;
+            --preview-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        body[data-preview-theme="light"] {
+            --preview-bg: #ffffff;
+            --preview-ink: #202124;
+            --preview-surface: #f1f3f4;
+            --preview-muted: #5f6368;
+            --preview-border: #d7dce5;
+            --preview-link: #1a73e8;
+            --preview-shadow: 0 10px 24px rgba(32, 33, 36, 0.08);
         }
 
         * {
@@ -21,7 +38,7 @@
         }
 
         body {
-            width: 356px;
+            width: 372px;
             margin: 0;
             padding: 14px;
             background:
@@ -41,7 +58,7 @@
 
         .header {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 12px;
             padding: 16px;
             border-bottom: 1px solid var(--line);
@@ -51,6 +68,15 @@
             width: 36px;
             height: 36px;
             border-radius: 8px;
+        }
+
+        .header-copy {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .header-actions {
+            margin-left: auto;
         }
 
         h1 {
@@ -66,6 +92,31 @@
             color: var(--muted);
             font-size: 12px;
             line-height: 1.2;
+        }
+
+        .reset-button {
+            min-height: 32px;
+            padding: 0 12px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: linear-gradient(180deg, #ffffff, #f5f6fa);
+            color: var(--ink);
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+        }
+
+        .reset-button:hover {
+            border-color: rgba(32, 33, 36, 0.2);
+            box-shadow: 0 6px 14px rgba(32, 33, 36, 0.12);
+            transform: translateY(-1px);
+        }
+
+        .reset-button:active {
+            transform: translateY(0);
+            box-shadow: none;
         }
 
         .settings {
@@ -113,6 +164,108 @@
             font-size: 12px;
             font-weight: 700;
             text-align: center;
+        }
+
+        .theme-picker {
+            display: grid;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .theme-toggle {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 4px;
+            padding: 4px;
+            border-radius: 999px;
+            background: #eef1f6;
+        }
+
+        .theme-toggle input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .theme-option {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            border-radius: 999px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .theme-toggle input:checked + .theme-option {
+            background: #ffffff;
+            color: var(--ink);
+            box-shadow: 0 8px 20px rgba(32, 33, 36, 0.08);
+        }
+
+        .theme-toggle input:focus-visible + .theme-option,
+        .reset-button:focus-visible {
+            outline: 2px solid #1a73e8;
+            outline-offset: 3px;
+        }
+
+        .preview-shell {
+            padding: 12px;
+            border-radius: 12px;
+            background:
+                radial-gradient(circle at top right, rgba(251, 188, 4, 0.24), transparent 44%),
+                #f3f5f9;
+            border: 1px solid rgba(32, 33, 36, 0.06);
+        }
+
+        .preview-label {
+            margin-bottom: 10px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .preview-card {
+            padding: 14px;
+            border: 1px solid var(--preview-border);
+            border-radius: 12px;
+            background: var(--preview-bg);
+            color: var(--preview-ink);
+            box-shadow: var(--preview-shadow);
+        }
+
+        .preview-card-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .preview-card-copy {
+            margin: 10px 0 0;
+            color: var(--preview-muted);
+            font-size: 12px;
+            line-height: 1.55;
+        }
+
+        .preview-inline-code {
+            display: inline-block;
+            margin: 0 2px;
+            padding: 1px 6px;
+            border-radius: 999px;
+            background: var(--preview-surface);
+            color: var(--preview-ink);
+            font-family: "Roboto Mono", monospace;
+            font-size: 11px;
+        }
+
+        .preview-inline-link {
+            color: var(--preview-link);
+            font-weight: 600;
         }
 
         .range-setting .setting-row {
@@ -214,13 +367,16 @@
         }
     </style>
 </head>
-<body>
+<body data-preview-theme="dark">
     <main class="panel">
         <header class="header">
             <img class="logo" src="icons/KeepDown_Logo_64x64.png" alt="">
-            <div>
+            <div class="header-copy">
                 <h1>KeepDown</h1>
                 <div class="subtitle">Google Keep Markdown</div>
+            </div>
+            <div class="header-actions">
+                <button type="button" class="reset-button" id="reset-settings">Reset</button>
             </div>
         </header>
 
@@ -234,6 +390,31 @@
                     </label>
                 </div>
                 <div class="setting-note">Newly opened notes show the preview unless that note has its own setting.</div>
+            </div>
+
+            <div class="setting">
+                <div>
+                    <div class="setting-title">Preview theme</div>
+                    <div class="setting-note">Switch the Markdown preview between the current dark surface and a lighter reading style.</div>
+                </div>
+                <div class="theme-picker">
+                    <div class="theme-toggle" role="radiogroup" aria-label="Preview theme">
+                        <input type="radio" id="preview-theme-dark" name="preview-theme" value="dark" checked>
+                        <label class="theme-option" for="preview-theme-dark">Dark</label>
+                        <input type="radio" id="preview-theme-light" name="preview-theme" value="light">
+                        <label class="theme-option" for="preview-theme-light">Light</label>
+                    </div>
+                    <div class="preview-shell">
+                        <div class="preview-label">Preview Sample</div>
+                        <div class="preview-card">
+                            <div class="preview-card-title">Weekly Notes</div>
+                            <div class="preview-card-copy">
+                                Review tasks, open <span class="preview-inline-link">links</span>, and keep inline
+                                <span class="preview-inline-code">code</span> easy to scan.
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="setting range-setting">
@@ -255,7 +436,7 @@
                 <div class="setting-row">
                     <div>
                         <label class="setting-title" for="markdown-width">Preview modes width</label>
-                        <div class="setting-note">Used by Editor and Preview / Preview modes.</div>
+                        <div class="setting-note">Used by Split and Preview modes.</div>
                     </div>
                     <output class="value-badge" id="markdown-width-value" for="markdown-width">75%</output>
                 </div>

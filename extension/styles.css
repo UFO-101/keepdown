@@ -1,4 +1,14 @@
 /* Our styles with distinct prefixes */
+:root {
+    --keep-md-preview-bg: #2a2b2e;
+    --keep-md-preview-text: #e8eaed;
+    --keep-md-preview-surface: #303134;
+    --keep-md-preview-border: #5f6368;
+    --keep-md-preview-muted: #9aa0a6;
+    --keep-md-preview-link: #8ab4f8;
+    --keep-md-preview-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
 .keep-md-container {
     display: flex;
     gap: 32px;
@@ -151,12 +161,13 @@ html.keep-md-is-resizing * {
 .keep-md-preview {
     flex: 1;
     min-width: 0;
-    background: #2a2b2e;  /* Slightly lighter than Keep's dark theme */
-    color: #e8eaed;
+    background: var(--keep-md-preview-bg);
+    color: var(--keep-md-preview-text);
     font-family: 'Google Sans', Roboto, Arial, sans-serif;
     padding: 16px 24px;  /* Reduced top/bottom padding, kept sides the same */
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--keep-md-preview-border);
+    box-shadow: var(--keep-md-preview-shadow);
     overflow-wrap: break-word;
     overflow-y: auto;
     margin: 8px;  /* Added margin around the preview */
@@ -195,13 +206,13 @@ html.keep-md-is-resizing * {
 .keep-md-preview em { font-style: italic; }
 .keep-md-preview strong { font-weight: 600; }
 .keep-md-preview code {
-    background: #303134;
+    background: var(--keep-md-preview-surface);
     padding: 2px 4px;
     border-radius: 4px;
     font-family: 'Roboto Mono', monospace;
 }
 .keep-md-preview pre {
-    background: #303134;
+    background: var(--keep-md-preview-surface);
     padding: 16px;
     border-radius: 8px;
     overflow-x: auto;
@@ -218,13 +229,13 @@ html.keep-md-is-resizing * {
 }
 .keep-md-preview li { margin: 4px 0; }
 .keep-md-preview blockquote {
-    border-left: 4px solid #5f6368;
+    border-left: 4px solid var(--keep-md-preview-border);
     margin: 16px 0;
     padding-left: 16px;
-    color: #9aa0a6;
+    color: var(--keep-md-preview-muted);
 }
 .keep-md-preview a {
-    color: #8ab4f8;
+    color: var(--keep-md-preview-link);
     text-decoration: none;
 }
 .keep-md-preview a:hover {
@@ -314,13 +325,13 @@ html.keep-md-is-resizing * {
 
 .keep-md-preview th,
 .keep-md-preview td {
-    border: 1px solid #5f6368;
+    border: 1px solid var(--keep-md-preview-border);
     padding: 8px;
     text-align: left;
 }
 
 .keep-md-preview th {
-    background: #303134;
+    background: var(--keep-md-preview-surface);
 }
 
 /* Task Lists */
@@ -330,7 +341,7 @@ html.keep-md-is-resizing * {
 
 /* Strikethrough */
 .keep-md-preview del {
-    color: #9aa0a6;
+    color: var(--keep-md-preview-muted);
 }
 
 /* Only preserve line breaks in code blocks */

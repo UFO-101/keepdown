@@ -7,8 +7,26 @@ const MARKDOWN_MODAL_WIDTH_KEY = 'markdownModalWidth';
 // Synced setting key for the global default markdown behavior.
 const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
 
+// Synced setting key for the markdown preview theme.
+const PREVIEW_THEME_KEY = 'previewTheme';
+
+// Default width used when the note is in Editor mode.
+const DEFAULT_EDITOR_MODAL_WIDTH = '64';
+
+// Default width used when the note shows markdown preview.
+const DEFAULT_MARKDOWN_MODAL_WIDTH = '75';
+
+// Preview theme options exposed in popup settings.
+const PREVIEW_THEME_DARK = 'dark';
+const PREVIEW_THEME_LIGHT = 'light';
+
+// Default preview theme keeps the current dark reading surface.
+const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
+
 document.addEventListener('DOMContentLoaded', function() {
     const defaultMarkdownToggle = document.getElementById('default-markdown');
+    const previewThemeInputs = Array.from(document.querySelectorAll('input[name="preview-theme"]'));
+    const resetButton = document.getElementById('reset-settings');
     const chromeApi = typeof chrome === 'undefined' ? null : chrome;
     const widthControls = [
         {
@@ -24,6 +42,12 @@ document.addEventListener('DOMContentLoaded', function() {
             value: document.getElementById('markdown-width-value')
         }
     ];
+    const defaultSettings = {
+        [EDITOR_MODAL_WIDTH_KEY]: DEFAULT_EDITOR_MODAL_WIDTH,
+        [MARKDOWN_MODAL_WIDTH_KEY]: DEFAULT_MARKDOWN_MODAL_WIDTH,
+        [DEFAULT_MARKDOWN_ENABLED_KEY]: true,
+        [PREVIEW_THEME_KEY]: DEFAULT_PREVIEW_THEME
+    };
 
     // Keep the range fill and value badge in sync.
     function updateWidthDisplay(control, value) {
@@ -39,6 +63,53 @@ document.addEventListener('DOMContentLoaded', function() {
     function setWidthControl(control, value) {
         control.slider.value = value;
         updateWidthDisplay(control, value);
+    }
+
+    // Falls back to the supported preview theme when storage has unknown data.
+    function normalizePreviewTheme(theme) {
+        return theme === PREVIEW_THEME_LIGHT ? PREVIEW_THEME_LIGHT : PREVIEW_THEME_DARK;
+    }
+
+    // Keeps the theme radios and the sample preview card aligned.
+    function setPreviewTheme(theme) {
+        const normalizedTheme = normalizePreviewTheme(theme);
+
+        document.body.dataset.previewTheme = normalizedTheme;
+        for (const input of previewThemeInputs) {
+            input.checked = input.value === normalizedTheme;
+        }
+    }
+
+    // Applies the full popup state after load, reset, or live storage updates.
+    function applySettings(settings) {
+        for (const control of widthControls) {
+            setWidthControl(control, settings[control.key]);
+        }
+
+        defaultMarkdownToggle.checked = settings[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
+        setPreviewTheme(settings[PREVIEW_THEME_KEY]);
+    }
+
+    // Reads current sync settings and refreshes the popup controls.
+    function loadSettings() {
+        if (chromeApi?.storage?.sync) {
+            chromeApi.storage.sync.get([
+                EDITOR_MODAL_WIDTH_KEY,
+                MARKDOWN_MODAL_WIDTH_KEY,
+                DEFAULT_MARKDOWN_ENABLED_KEY,
+                PREVIEW_THEME_KEY
+            ], function(result) {
+                applySettings({
+                    [EDITOR_MODAL_WIDTH_KEY]: result[EDITOR_MODAL_WIDTH_KEY] || defaultSettings[EDITOR_MODAL_WIDTH_KEY],
+                    [MARKDOWN_MODAL_WIDTH_KEY]: result[MARKDOWN_MODAL_WIDTH_KEY] || defaultSettings[MARKDOWN_MODAL_WIDTH_KEY],
+                    [DEFAULT_MARKDOWN_ENABLED_KEY]: result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false,
+                    [PREVIEW_THEME_KEY]: normalizePreviewTheme(result[PREVIEW_THEME_KEY] || defaultSettings[PREVIEW_THEME_KEY])
+                });
+            });
+            return;
+        }
+
+        applySettings(defaultSettings);
     }
 
     function sendActiveTabMessage(message) {
@@ -58,24 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Load saved settings.
-    if (chromeApi?.storage?.sync) {
-        chromeApi.storage.sync.get([
-            EDITOR_MODAL_WIDTH_KEY,
-            MARKDOWN_MODAL_WIDTH_KEY,
-            DEFAULT_MARKDOWN_ENABLED_KEY
-        ], function(result) {
-            for (const control of widthControls) {
-                setWidthControl(control, result[control.key] || control.slider.value);
-            }
-
-            defaultMarkdownToggle.checked = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
-        });
-    } else {
-        for (const control of widthControls) {
-            updateWidthDisplay(control, control.slider.value);
-        }
-    }
+    loadSettings();
 
     // Save width changes and notify the content script immediately.
     for (const control of widthControls) {
@@ -110,6 +164,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (changes[DEFAULT_MARKDOWN_ENABLED_KEY]) {
             defaultMarkdownToggle.checked = changes[DEFAULT_MARKDOWN_ENABLED_KEY].newValue !== false;
         }
+
+        if (changes[PREVIEW_THEME_KEY]) {
+            setPreviewTheme(changes[PREVIEW_THEME_KEY].newValue);
+        }
     });
 
     defaultMarkdownToggle.addEventListener('change', function() {
@@ -119,6 +177,47 @@ document.addEventListener('DOMContentLoaded', function() {
         sendActiveTabMessage({
             type: 'updateDefaultMarkdownEnabled',
             value: enabled
+        });
+    });
+
+    for (const input of previewThemeInputs) {
+        input.addEventListener('change', function() {
+            if (!this.checked) {
+                return;
+            }
+
+            const theme = normalizePreviewTheme(this.value);
+            setPreviewTheme(theme);
+            chromeApi?.storage?.sync?.set({[PREVIEW_THEME_KEY]: theme});
+            sendActiveTabMessage({
+                type: 'updatePreviewTheme',
+                value: theme
+            });
+        });
+    }
+
+    resetButton?.addEventListener('click', function() {
+        applySettings(defaultSettings);
+
+        if (!chromeApi?.storage?.sync) {
+            return;
+        }
+
+        chromeApi.storage.sync.set(defaultSettings, function() {
+            sendActiveTabMessage({
+                type: 'updateModalWidths',
+                editorWidth: defaultSettings[EDITOR_MODAL_WIDTH_KEY],
+                markdownWidth: defaultSettings[MARKDOWN_MODAL_WIDTH_KEY]
+            });
+            sendActiveTabMessage({
+                type: 'updateDefaultMarkdownEnabled',
+                value: defaultSettings[DEFAULT_MARKDOWN_ENABLED_KEY]
+            });
+            sendActiveTabMessage({
+                type: 'updatePreviewTheme',
+                value: defaultSettings[PREVIEW_THEME_KEY]
+            });
+            loadSettings();
         });
     });
 });
