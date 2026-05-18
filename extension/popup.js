@@ -1,20 +1,38 @@
-const MODAL_WIDTH_KEY = 'modalWidth';
+const EDITOR_MODAL_WIDTH_KEY = 'editorModalWidth';
+const MARKDOWN_MODAL_WIDTH_KEY = 'markdownModalWidth';
 const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
 
 document.addEventListener('DOMContentLoaded', function() {
-    const widthSlider = document.getElementById('width');
-    const widthValue = document.getElementById('width-value');
     const defaultMarkdownToggle = document.getElementById('default-markdown');
     const chromeApi = typeof chrome === 'undefined' ? null : chrome;
+    const widthControls = [
+        {
+            key: EDITOR_MODAL_WIDTH_KEY,
+            messageKey: 'editorWidth',
+            slider: document.getElementById('editor-width'),
+            value: document.getElementById('editor-width-value')
+        },
+        {
+            key: MARKDOWN_MODAL_WIDTH_KEY,
+            messageKey: 'markdownWidth',
+            slider: document.getElementById('markdown-width'),
+            value: document.getElementById('markdown-width-value')
+        }
+    ];
 
-    function updateWidthDisplay(value) {
+    function updateWidthDisplay(control, value) {
         const numericValue = Number(value);
-        const min = Number(widthSlider.min);
-        const max = Number(widthSlider.max);
+        const min = Number(control.slider.min);
+        const max = Number(control.slider.max);
         const progress = ((numericValue - min) / (max - min)) * 100;
 
-        widthValue.textContent = `${numericValue}%`;
-        widthSlider.style.setProperty('--slider-progress', `${progress}%`);
+        control.value.textContent = `${numericValue}%`;
+        control.slider.style.setProperty('--slider-progress', `${progress}%`);
+    }
+
+    function setWidthControl(control, value) {
+        control.slider.value = value;
+        updateWidthDisplay(control, value);
     }
 
     function sendActiveTabMessage(message) {
@@ -35,27 +53,54 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (chromeApi?.storage?.sync) {
-        chromeApi.storage.sync.get([MODAL_WIDTH_KEY, DEFAULT_MARKDOWN_ENABLED_KEY], function(result) {
-            const savedWidth = result[MODAL_WIDTH_KEY] || widthSlider.value;
-            const defaultMarkdownEnabled = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
+        chromeApi.storage.sync.get([
+            EDITOR_MODAL_WIDTH_KEY,
+            MARKDOWN_MODAL_WIDTH_KEY,
+            DEFAULT_MARKDOWN_ENABLED_KEY
+        ], function(result) {
+            for (const control of widthControls) {
+                setWidthControl(control, result[control.key] || control.slider.value);
+            }
 
-            widthSlider.value = savedWidth;
-            defaultMarkdownToggle.checked = defaultMarkdownEnabled;
-            updateWidthDisplay(savedWidth);
+            defaultMarkdownToggle.checked = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
         });
     } else {
-        updateWidthDisplay(widthSlider.value);
+        for (const control of widthControls) {
+            updateWidthDisplay(control, control.slider.value);
+        }
     }
 
-    widthSlider.addEventListener('input', function() {
-        const value = this.value;
-        updateWidthDisplay(value);
+    for (const control of widthControls) {
+        control.slider.addEventListener('input', function() {
+            const value = this.value;
+            const message = {
+                type: 'updateModalWidths',
+                [control.messageKey]: value
+            };
 
-        chromeApi?.storage?.sync?.set({[MODAL_WIDTH_KEY]: value});
-        sendActiveTabMessage({
-            type: 'updateModalWidth',
-            value: value
+            updateWidthDisplay(control, value);
+            chromeApi?.storage?.sync?.set({[control.key]: value});
+            sendActiveTabMessage(message);
         });
+    }
+
+    chromeApi?.storage?.onChanged?.addListener(function(changes, areaName) {
+        if (areaName !== 'sync') {
+            return;
+        }
+
+        for (const control of widthControls) {
+            const change = changes[control.key];
+            if (!change) {
+                continue;
+            }
+
+            setWidthControl(control, change.newValue || control.slider.value);
+        }
+
+        if (changes[DEFAULT_MARKDOWN_ENABLED_KEY]) {
+            defaultMarkdownToggle.checked = changes[DEFAULT_MARKDOWN_ENABLED_KEY].newValue !== false;
+        }
     });
 
     defaultMarkdownToggle.addEventListener('change', function() {

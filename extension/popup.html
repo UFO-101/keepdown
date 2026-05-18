@@ -21,7 +21,7 @@
         }
 
         body {
-            width: 332px;
+            width: 356px;
             margin: 0;
             padding: 14px;
             background:
@@ -70,7 +70,7 @@
 
         .settings {
             display: grid;
-            gap: 12px;
+            gap: 10px;
             padding: 14px;
         }
 
@@ -115,10 +115,14 @@
             text-align: center;
         }
 
+        .range-setting .setting-row {
+            align-items: flex-start;
+        }
+
         input[type="range"] {
             width: 100%;
             height: 28px;
-            margin: 12px 0 0;
+            margin: 10px 0 0;
             background: transparent;
             accent-color: var(--accent);
             cursor: pointer;
@@ -232,12 +236,30 @@
                 <div class="setting-note">Newly opened notes show the preview unless that note has its own setting.</div>
             </div>
 
-            <div class="setting">
+            <div class="setting range-setting">
                 <div class="setting-row">
-                    <label class="setting-title" for="width">Modal width</label>
-                    <output class="value-badge" id="width-value" for="width">75%</output>
+                    <div>
+                        <label class="setting-title" for="editor-width">Editor width</label>
+                        <div class="setting-note">Used when the note is in Editor mode.</div>
+                    </div>
+                    <output class="value-badge" id="editor-width-value" for="editor-width">64%</output>
                 </div>
-                <input type="range" id="width" min="50" max="95" value="75">
+                <input type="range" id="editor-width" min="50" max="95" value="64">
+                <div class="range-scale">
+                    <span>50%</span>
+                    <span>95%</span>
+                </div>
+            </div>
+
+            <div class="setting range-setting">
+                <div class="setting-row">
+                    <div>
+                        <label class="setting-title" for="markdown-width">Preview modes width</label>
+                        <div class="setting-note">Used by Editor and Preview / Preview modes.</div>
+                    </div>
+                    <output class="value-badge" id="markdown-width-value" for="markdown-width">75%</output>
+                </div>
+                <input type="range" id="markdown-width" min="50" max="95" value="75">
                 <div class="range-scale">
                     <span>50%</span>
                     <span>95%</span>
