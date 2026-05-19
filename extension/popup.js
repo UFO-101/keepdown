@@ -42,6 +42,9 @@ const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;
 // Default behavior keeps the preview aligned with editor scrolling.
 const DEFAULT_SCROLL_SYNC_ENABLED = true;
 
+// Debounce slider persistence so dragging does not exceed Chrome storage quotas.
+const WIDTH_STORAGE_WRITE_DELAY_MS = 500;
+
 document.addEventListener('DOMContentLoaded', function() {
     const defaultMarkdownToggle = document.getElementById('default-markdown');
     const scrollSyncToggle = document.getElementById('scroll-sync');
@@ -50,6 +53,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const resetButton = document.getElementById('reset-settings');
     const chromeApi = typeof chrome === 'undefined' ? null : chrome;
     const systemPreviewThemeQuery = window.matchMedia?.('(prefers-color-scheme: light)');
+    let pendingWidthSettings = {};
+    let widthStorageWriteTimer = 0;
     const widthControls = [
         {
             key: EDITOR_MODAL_WIDTH_KEY,
@@ -189,6 +194,41 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function setSyncStorage(values, callback) {
+        if (!chromeApi?.storage?.sync) {
+            callback?.();
+            return;
+        }
+
+        const onComplete = function() {
+            void chromeApi.runtime.lastError;
+            callback?.();
+        };
+        const result = chromeApi.storage.sync.set(values, onComplete);
+        result?.catch?.(function() {});
+    }
+
+    function flushWidthStorageWrites() {
+        if (widthStorageWriteTimer) {
+            window.clearTimeout(widthStorageWriteTimer);
+            widthStorageWriteTimer = 0;
+        }
+
+        const values = pendingWidthSettings;
+        pendingWidthSettings = {};
+        if (Object.keys(values).length === 0) {
+            return;
+        }
+
+        setSyncStorage(values);
+    }
+
+    function queueWidthStorageWrite(key, value) {
+        pendingWidthSettings[key] = value;
+        window.clearTimeout(widthStorageWriteTimer);
+        widthStorageWriteTimer = window.setTimeout(flushWidthStorageWrites, WIDTH_STORAGE_WRITE_DELAY_MS);
+    }
+
     loadSettings();
 
     systemPreviewThemeQuery?.addEventListener('change', function() {
@@ -208,10 +248,17 @@ document.addEventListener('DOMContentLoaded', function() {
             };
 
             updateWidthDisplay(control, value);
-            chromeApi?.storage?.sync?.set({[control.key]: value});
+            queueWidthStorageWrite(control.key, value);
             sendActiveTabMessage(message);
         });
+
+        control.slider.addEventListener('change', function() {
+            queueWidthStorageWrite(control.key, this.value);
+            flushWidthStorageWrites();
+        });
     }
+
+    window.addEventListener('beforeunload', flushWidthStorageWrites);
 
     // Keep the popup synchronized when the in-note resize handle updates storage.
     chromeApi?.storage?.onChanged?.addListener(function(changes, areaName) {
@@ -225,7 +272,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 continue;
             }
 
-            setWidthControl(control, change.newValue || control.slider.value);
+            setWidthControl(control, change.newValue ?? control.slider.value);
         }
 
         if (changes[DEFAULT_MARKDOWN_ENABLED_KEY]) {
@@ -248,7 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
     defaultMarkdownToggle.addEventListener('change', function() {
         const enabled = this.checked;
 
-        chromeApi?.storage?.sync?.set({[DEFAULT_MARKDOWN_ENABLED_KEY]: enabled});
+        setSyncStorage({[DEFAULT_MARKDOWN_ENABLED_KEY]: enabled});
         sendActiveTabMessage({
             type: 'updateDefaultMarkdownEnabled',
             value: enabled
@@ -258,7 +305,7 @@ document.addEventListener('DOMContentLoaded', function() {
     scrollSyncToggle.addEventListener('change', function() {
         const enabled = this.checked;
 
-        chromeApi?.storage?.sync?.set({[SCROLL_SYNC_ENABLED_KEY]: enabled});
+        setSyncStorage({[SCROLL_SYNC_ENABLED_KEY]: enabled});
         sendActiveTabMessage({
             type: 'updateScrollSyncEnabled',
             value: enabled
@@ -273,7 +320,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const theme = normalizePreviewTheme(this.value);
             setPreviewTheme(theme);
-            chromeApi?.storage?.sync?.set({[PREVIEW_THEME_KEY]: theme});
+            setSyncStorage({[PREVIEW_THEME_KEY]: theme});
             sendActiveTabMessage({
                 type: 'updatePreviewTheme',
                 value: theme
@@ -285,7 +332,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const enabled = this.checked;
 
         setPreserveSoftBreaks(enabled);
-        chromeApi?.storage?.sync?.set({[PRESERVE_SOFT_LINE_BREAKS_KEY]: enabled});
+        setSyncStorage({[PRESERVE_SOFT_LINE_BREAKS_KEY]: enabled});
         sendActiveTabMessage({
             type: 'updatePreserveSoftLineBreaks',
             value: enabled
@@ -299,7 +346,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        chromeApi.storage.sync.set(defaultSettings, function() {
+        setSyncStorage(defaultSettings, function() {
             sendActiveTabMessage({
                 type: 'updateModalWidths',
                 editorWidth: defaultSettings[EDITOR_MODAL_WIDTH_KEY],

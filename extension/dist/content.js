@@ -28009,7 +28009,7 @@
 
       if (
         typeof testOrVisitor === 'function' &&
-        "undefined" !== 'function'
+        typeof visitorOrReverse !== 'function'
       ) {
         test = undefined;
         visitor = testOrVisitor;
@@ -37272,6 +37272,8 @@
 
     const MATH_NODE_TYPES = new Set(['inlineMath', 'math']);
 
+    const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
+
     // Renders markdown to HTML and annotates block nodes with source line metadata.
     function renderMarkdownWithAnchors(markdownText) {
         const tree = fromMarkdown(markdownText, {
@@ -37314,10 +37316,48 @@
             }
         });
 
+        sanitizePreviewUrls(hast);
+
         return {
             html: toHtml(hast, {allowDangerousHtml: true}),
             anchors
         };
+    }
+
+    // Drops unsafe markdown URLs before the preview HTML is written into the page.
+    function sanitizePreviewUrls(tree) {
+        visit(tree, 'element', (node) => {
+            const properties = node.properties;
+            if (!properties) {
+                return;
+            }
+
+            sanitizeUrlProperty(properties, 'href');
+            sanitizeUrlProperty(properties, 'src');
+        });
+    }
+
+    function sanitizeUrlProperty(properties, propertyName) {
+        if (!Object.prototype.hasOwnProperty.call(properties, propertyName)) {
+            return;
+        }
+
+        if (!isSafePreviewUrl(properties[propertyName])) {
+            delete properties[propertyName];
+        }
+    }
+
+    function isSafePreviewUrl(value) {
+        if (typeof value !== 'string') {
+            return false;
+        }
+
+        try {
+            const url = new URL(value, 'https://keep.google.com/');
+            return SAFE_URL_PROTOCOLS.has(url.protocol);
+        } catch {
+            return false;
+        }
     }
 
     // Keeps anchor metadata on the outer <pre> wrapper instead of the inner <code>.
@@ -37966,6 +38006,9 @@
     // Guards document-wide modal scans so multiple mutations collapse into one pass.
     let scanScheduled = false;
 
+    // Guards layout-heavy scroll sync refreshes so resize and slider bursts collapse into one frame.
+    let scrollSyncRefreshScheduled = false;
+
     // Split panes need a minimum fixed viewport before editor-to-preview scroll sync can work.
     const MIN_SPLIT_PANE_HEIGHT = 180;
 
@@ -38073,6 +38116,9 @@
     function setModalWidthForTarget(target, width) {
         const fallback = getModalWidthForTarget(target);
         const normalizedWidth = normalizeModalWidth(target, width, fallback);
+        if (normalizedWidth === fallback) {
+            return normalizedWidth;
+        }
 
         if (target === 'editor') {
             currentEditorModalWidth = normalizedWidth;
@@ -38084,7 +38130,7 @@
 
         updateModalDimensions();
         updateAllResizeHandles();
-        refreshAllScrollSyncContexts();
+        scheduleAllScrollSyncContextsRefresh();
 
         return normalizedWidth;
     }
@@ -38415,6 +38461,19 @@
         }
     }
 
+    // Batches layout-heavy scroll sync refreshes into one animation frame.
+    function scheduleAllScrollSyncContextsRefresh() {
+        if (scrollSyncRefreshScheduled) {
+            return;
+        }
+
+        scrollSyncRefreshScheduled = true;
+        requestAnimationFrame(() => {
+            scrollSyncRefreshScheduled = false;
+            refreshAllScrollSyncContexts();
+        });
+    }
+
     // Converts a pointer x-coordinate into the active mode's width unit.
     function getWidthFromPointer(target, clientX) {
         const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
@@ -38432,19 +38491,26 @@
             return;
         }
 
+        const resizeHandle = context.resizeHandle;
+        if (!resizeHandle) {
+            return;
+        }
+
         const target = getModalWidthTarget(context.viewMode);
         const storageKey = getModalWidthStorageKey(target);
         let pendingWidth = getModalWidthForTarget(target);
         let didResize = false;
+        let isResizing = true;
 
         event.preventDefault();
         event.stopPropagation();
-        context.resizeHandle?.classList.add('is-dragging');
+        resizeHandle.classList.add('is-dragging');
         document.documentElement.classList.add('keep-md-is-resizing');
 
         const applyPointerWidth = (clientX) => {
+            const previousWidth = pendingWidth;
             pendingWidth = setModalWidthForTarget(target, getWidthFromPointer(target, clientX));
-            didResize = true;
+            didResize = didResize || pendingWidth !== previousWidth;
         };
 
         const onPointerMove = (moveEvent) => {
@@ -38457,25 +38523,31 @@
         };
 
         const finishResize = async (finishEvent) => {
-            if (finishEvent.pointerId !== event.pointerId) {
+            if (!isResizing || finishEvent.pointerId !== event.pointerId) {
                 return;
             }
 
+            isResizing = false;
             document.removeEventListener('pointermove', onPointerMove, true);
             document.removeEventListener('pointerup', finishResize, true);
             document.removeEventListener('pointercancel', finishResize, true);
+            resizeHandle.removeEventListener('lostpointercapture', finishResize, true);
+            if (resizeHandle.hasPointerCapture?.(event.pointerId)) {
+                resizeHandle.releasePointerCapture(event.pointerId);
+            }
             document.documentElement.classList.remove('keep-md-is-resizing');
-            context.resizeHandle?.classList.remove('is-dragging');
+            resizeHandle.classList.remove('is-dragging');
 
             if (didResize) {
                 await setSyncStorage({[storageKey]: String(pendingWidth)});
             }
         };
 
-        context.resizeHandle?.setPointerCapture?.(event.pointerId);
+        resizeHandle.setPointerCapture?.(event.pointerId);
         document.addEventListener('pointermove', onPointerMove, true);
         document.addEventListener('pointerup', finishResize, true);
         document.addEventListener('pointercancel', finishResize, true);
+        resizeHandle.addEventListener('lostpointercapture', finishResize, true);
     }
 
     // Reflects the active view mode in button classes and accessibility labels.
@@ -38860,34 +38932,50 @@
 
     // Updates CSS variables consumed by extension/styles.css.
     function updateModalDimensions(widths = {}) {
+        let dimensionsChanged = false;
+
         if (hasOwn(widths, EDITOR_MODAL_WIDTH_KEY)) {
-            currentEditorModalWidth = normalizeModalWidth(
+            const nextEditorModalWidth = normalizeModalWidth(
                 'editor',
                 widths[EDITOR_MODAL_WIDTH_KEY],
                 currentEditorModalWidth
             );
+            if (nextEditorModalWidth !== currentEditorModalWidth) {
+                currentEditorModalWidth = nextEditorModalWidth;
+                dimensionsChanged = true;
+            }
         }
 
         if (hasOwn(widths, SPLIT_MODAL_WIDTH_KEY)) {
-            currentSplitModalWidth = normalizeModalWidth(
+            const nextSplitModalWidth = normalizeModalWidth(
                 'split',
                 widths[SPLIT_MODAL_WIDTH_KEY],
                 currentSplitModalWidth
             );
+            if (nextSplitModalWidth !== currentSplitModalWidth) {
+                currentSplitModalWidth = nextSplitModalWidth;
+                dimensionsChanged = true;
+            }
         }
 
         if (hasOwn(widths, PREVIEW_MODAL_WIDTH_KEY)) {
-            currentPreviewModalWidth = normalizeModalWidth(
+            const nextPreviewModalWidth = normalizeModalWidth(
                 'preview',
                 widths[PREVIEW_MODAL_WIDTH_KEY],
                 currentPreviewModalWidth
             );
+            if (nextPreviewModalWidth !== currentPreviewModalWidth) {
+                currentPreviewModalWidth = nextPreviewModalWidth;
+                dimensionsChanged = true;
+            }
         }
 
         const root = document.documentElement;
         root.style.setProperty('--keep-md-editor-modal-width', `${currentEditorModalWidth}px`);
         root.style.setProperty('--keep-md-split-modal-width', `${currentSplitModalWidth}vw`);
         root.style.setProperty('--keep-md-preview-modal-width', `${currentPreviewModalWidth}vw`);
+
+        return dimensionsChanged;
     }
 
     // Reapplies the global default mode to notes that do not have per-note overrides.
@@ -38907,13 +38995,15 @@
     // Handles direct messages from the popup without waiting for storage change events.
     chrome.runtime.onMessage.addListener((message) => {
         if (message.type === 'updateModalWidths') {
-            updateModalDimensions({
+            const dimensionsChanged = updateModalDimensions({
                 [EDITOR_MODAL_WIDTH_KEY]: message.editorWidth,
                 [SPLIT_MODAL_WIDTH_KEY]: message.splitWidth,
                 [PREVIEW_MODAL_WIDTH_KEY]: message.previewWidth
             });
-            updateAllResizeHandles();
-            refreshAllScrollSyncContexts();
+            if (dimensionsChanged) {
+                updateAllResizeHandles();
+                scheduleAllScrollSyncContextsRefresh();
+            }
             return;
         }
 
@@ -38937,45 +39027,35 @@
         if (message.type === 'updateScrollSyncEnabled') {
             scrollSyncEnabled = message.value !== false;
             refreshAllScrollSyncContexts();
+            return;
         }
     });
 
     // Synchronizes live modals when popup settings or note mode overrides change.
     chrome.storage.onChanged.addListener((changes, areaName) => {
         if (areaName === 'sync') {
-            let dimensionsChanged = false;
+            const changedWidths = {};
+            let hasWidthChange = false;
 
             if (changes[EDITOR_MODAL_WIDTH_KEY]) {
-                currentEditorModalWidth = normalizeModalWidth(
-                    'editor',
-                    changes[EDITOR_MODAL_WIDTH_KEY].newValue,
-                    currentEditorModalWidth
-                );
-                dimensionsChanged = true;
+                changedWidths[EDITOR_MODAL_WIDTH_KEY] = changes[EDITOR_MODAL_WIDTH_KEY].newValue;
+                hasWidthChange = true;
             }
 
             if (changes[SPLIT_MODAL_WIDTH_KEY]) {
-                currentSplitModalWidth = normalizeModalWidth(
-                    'split',
-                    changes[SPLIT_MODAL_WIDTH_KEY].newValue,
-                    currentSplitModalWidth
-                );
-                dimensionsChanged = true;
+                changedWidths[SPLIT_MODAL_WIDTH_KEY] = changes[SPLIT_MODAL_WIDTH_KEY].newValue;
+                hasWidthChange = true;
             }
 
             if (changes[PREVIEW_MODAL_WIDTH_KEY]) {
-                currentPreviewModalWidth = normalizeModalWidth(
-                    'preview',
-                    changes[PREVIEW_MODAL_WIDTH_KEY].newValue,
-                    currentPreviewModalWidth
-                );
-                dimensionsChanged = true;
+                changedWidths[PREVIEW_MODAL_WIDTH_KEY] = changes[PREVIEW_MODAL_WIDTH_KEY].newValue;
+                hasWidthChange = true;
             }
 
+            const dimensionsChanged = hasWidthChange && updateModalDimensions(changedWidths);
             if (dimensionsChanged) {
-                updateModalDimensions();
                 updateAllResizeHandles();
-                refreshAllScrollSyncContexts();
+                scheduleAllScrollSyncContextsRefresh();
             }
 
             if (changes[DEFAULT_MARKDOWN_ENABLED_KEY]) {
@@ -39081,7 +39161,7 @@
         });
 
         // Resize the split panes when the viewport changes so scroll hosts stay valid.
-        window.addEventListener('resize', refreshAllScrollSyncContexts);
+        window.addEventListener('resize', scheduleAllScrollSyncContextsRefresh);
     }
 
     // Scans the document for currently open Keep note modals.

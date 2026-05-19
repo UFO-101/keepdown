@@ -26,6 +26,8 @@ const ANCHOR_NODE_TYPES = new Set([
 
 const MATH_NODE_TYPES = new Set(['inlineMath', 'math']);
 
+const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
+
 // Renders markdown to HTML and annotates block nodes with source line metadata.
 export function renderMarkdownWithAnchors(markdownText) {
     const tree = fromMarkdown(markdownText, {
@@ -68,10 +70,48 @@ export function renderMarkdownWithAnchors(markdownText) {
         }
     });
 
+    sanitizePreviewUrls(hast);
+
     return {
         html: toHtml(hast, {allowDangerousHtml: true}),
         anchors
     };
+}
+
+// Drops unsafe markdown URLs before the preview HTML is written into the page.
+function sanitizePreviewUrls(tree) {
+    visit(tree, 'element', (node) => {
+        const properties = node.properties;
+        if (!properties) {
+            return;
+        }
+
+        sanitizeUrlProperty(properties, 'href');
+        sanitizeUrlProperty(properties, 'src');
+    });
+}
+
+function sanitizeUrlProperty(properties, propertyName) {
+    if (!Object.prototype.hasOwnProperty.call(properties, propertyName)) {
+        return;
+    }
+
+    if (!isSafePreviewUrl(properties[propertyName])) {
+        delete properties[propertyName];
+    }
+}
+
+function isSafePreviewUrl(value) {
+    if (typeof value !== 'string') {
+        return false;
+    }
+
+    try {
+        const url = new URL(value, 'https://keep.google.com/');
+        return SAFE_URL_PROTOCOLS.has(url.protocol);
+    } catch {
+        return false;
+    }
 }
 
 // Keeps anchor metadata on the outer <pre> wrapper instead of the inner <code>.
