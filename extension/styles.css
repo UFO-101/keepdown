@@ -1,7 +1,8 @@
 /* Our styles with distinct prefixes */
 :root {
-    --keep-md-editor-modal-width: 64vw;
-    --keep-md-markdown-modal-width: 75vw;
+    --keep-md-editor-modal-width: 600px;
+    --keep-md-split-modal-width: 75vw;
+    --keep-md-preview-modal-width: 75vw;
     --keep-md-preview-bg: #2a2b2e;
     --keep-md-preview-text: #e8eaed;
     --keep-md-preview-surface: #303134;
@@ -307,6 +308,7 @@ html.keep-md-is-resizing * {
 .keep-md-modal {
     position: fixed !important;
     height: auto !important;
+    max-width: 95vw !important;
     max-height: 95vh !important;
     left: 50% !important;
     top: 50% !important;
@@ -319,10 +321,13 @@ html.keep-md-is-resizing * {
     width: var(--keep-md-editor-modal-width) !important;
 }
 
-/* Shared modal width for Editor and Preview / Preview modes. */
-.keep-md-mode-split,
+/* Split and Preview widths are stored separately. */
+.keep-md-mode-split {
+    width: var(--keep-md-split-modal-width) !important;
+}
+
 .keep-md-mode-preview {
-    width: var(--keep-md-markdown-modal-width) !important;
+    width: var(--keep-md-preview-modal-width) !important;
 }
 
 /* Target the inner modal container. */

@@ -42,8 +42,9 @@ Click the extension icon to open the settings popup:
 - **Sync editor scroll** — Toggle whether the preview follows editor scrolling in Split mode; enabled by default
 - **Preview theme** — Follow Google Keep's current appearance by default, falling back to the system appearance, or choose a fixed Dark or Light theme with a live preview sample
 - **Preserve soft line breaks** — Keep single line breaks visible inside normal paragraphs; disabled by default to preserve standard CommonMark rendering
-- **Editor width** — Slider (50%–95%) to control modal width in Editor-only mode
-- **Preview modes width** — Slider (50%–95%) to control modal width in Split / Preview modes
+- **Editor width** — Slider (600px–1600px) to control modal width in Editor-only mode
+- **Editor and Preview width** — Slider (50%–95%) to control modal width in Split mode
+- **Preview width** — Slider (50%–95%) to control modal width in Preview mode
 - **Reset** — Restore all settings to defaults
 
 All changes sync instantly to any open Keep tab without reloading.

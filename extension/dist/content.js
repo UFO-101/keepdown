@@ -37162,8 +37162,11 @@
     // Synced setting key for editor-only modal width.
     const EDITOR_MODAL_WIDTH_KEY = 'editorModalWidth';
 
-    // Synced setting key for markdown preview modal width.
-    const MARKDOWN_MODAL_WIDTH_KEY = 'markdownModalWidth';
+    // Synced setting key for split editor-preview modal width.
+    const SPLIT_MODAL_WIDTH_KEY = 'splitModalWidth';
+
+    // Synced setting key for preview-only modal width.
+    const PREVIEW_MODAL_WIDTH_KEY = 'previewModalWidth';
 
     // Synced setting key for the global default markdown behavior.
     const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
@@ -37180,17 +37183,26 @@
     // Local setting prefix for per-note view mode overrides.
     const NOTE_MARKDOWN_MODE_PREFIX = 'noteMarkdownMode:';
 
-    // Default modal width used when the note opens in editor-only mode.
-    const DEFAULT_EDITOR_MODAL_WIDTH = 64;
+    // Default editor-only modal width mirrors Keep's native modal width.
+    const DEFAULT_EDITOR_MODAL_WIDTH = 600;
 
-    // Default modal width used when the note opens with a preview.
-    const DEFAULT_MARKDOWN_MODAL_WIDTH = 75;
+    // Default modal width used when the note opens in split mode.
+    const DEFAULT_SPLIT_MODAL_WIDTH = 75;
 
-    // Minimum modal width allowed by sliders and drag handles.
-    const MIN_MODAL_WIDTH = 50;
+    // Default modal width used when the note opens in preview-only mode.
+    const DEFAULT_PREVIEW_MODAL_WIDTH = 75;
 
-    // Maximum modal width allowed by sliders and drag handles.
-    const MAX_MODAL_WIDTH = 95;
+    // Minimum editor-only modal width allowed by sliders and drag handles.
+    const MIN_EDITOR_MODAL_WIDTH = 600;
+
+    // Maximum editor-only modal width allowed by sliders and drag handles.
+    const MAX_EDITOR_MODAL_WIDTH = 1600;
+
+    // Minimum split/preview modal width allowed by sliders and drag handles.
+    const MIN_MARKDOWN_MODAL_WIDTH = 50;
+
+    // Maximum split/preview modal width allowed by sliders and drag handles.
+    const MAX_MARKDOWN_MODAL_WIDTH = 95;
 
     // Dark preview theme keeps the current KeepDown look.
     const PREVIEW_THEME_DARK = 'dark';
@@ -37936,8 +37948,11 @@
     // Current synced modal width for editor-only mode.
     let currentEditorModalWidth = DEFAULT_EDITOR_MODAL_WIDTH;
 
-    // Current synced modal width for modes that include markdown preview.
-    let currentMarkdownModalWidth = DEFAULT_MARKDOWN_MODAL_WIDTH;
+    // Current synced modal width for split editor-preview mode.
+    let currentSplitModalWidth = DEFAULT_SPLIT_MODAL_WIDTH;
+
+    // Current synced modal width for preview-only mode.
+    let currentPreviewModalWidth = DEFAULT_PREVIEW_MODAL_WIDTH;
 
     // Global default for opening notes in markdown mode.
     let defaultMarkdownEnabled = true;
@@ -38005,24 +38020,58 @@
         return noteKey ? `${NOTE_MARKDOWN_MODE_PREFIX}${noteKey}` : null;
     }
 
-    // Editor mode and markdown modes intentionally keep separate modal width preferences.
-    function normalizeModalWidth(width, fallback) {
-        return clampNumber$1(width, MIN_MODAL_WIDTH, MAX_MODAL_WIDTH, fallback);
-    }
-
     // Maps note view modes to the width preference bucket they should use.
     function getModalWidthTarget(mode) {
-        return mode === VIEW_MODE_EDITOR ? 'editor' : 'markdown';
+        if (mode === VIEW_MODE_PREVIEW) {
+            return 'preview';
+        }
+
+        return mode === VIEW_MODE_EDITOR ? 'editor' : 'split';
     }
 
     // Returns the synced storage key for a width preference bucket.
     function getModalWidthStorageKey(target) {
-        return target === 'editor' ? EDITOR_MODAL_WIDTH_KEY : MARKDOWN_MODAL_WIDTH_KEY;
+        if (target === 'editor') {
+            return EDITOR_MODAL_WIDTH_KEY;
+        }
+
+        return target === 'preview' ? PREVIEW_MODAL_WIDTH_KEY : SPLIT_MODAL_WIDTH_KEY;
+    }
+
+    // Returns the min/max range for a width preference bucket.
+    function getModalWidthLimits(target) {
+        if (target === 'editor') {
+            return {
+                min: MIN_EDITOR_MODAL_WIDTH,
+                max: MAX_EDITOR_MODAL_WIDTH
+            };
+        }
+
+        return {
+            min: MIN_MARKDOWN_MODAL_WIDTH,
+            max: MAX_MARKDOWN_MODAL_WIDTH
+        };
+    }
+
+    // Editor width is pixel-based; Split and Preview widths are viewport percentages.
+    function getModalWidthUnit(target) {
+        return target === 'editor' ? 'px' : '%';
+    }
+
+    // Validates values loaded from storage before applying them to the note.
+    function normalizeModalWidth(target, width, fallback) {
+        const limits = getModalWidthLimits(target);
+
+        return clampNumber$1(width, limits.min, limits.max, fallback);
     }
 
     // Returns the current in-memory width for a width preference bucket.
     function getModalWidthForTarget(target) {
-        return target === 'editor' ? currentEditorModalWidth : currentMarkdownModalWidth;
+        if (target === 'editor') {
+            return currentEditorModalWidth;
+        }
+
+        return target === 'preview' ? currentPreviewModalWidth : currentSplitModalWidth;
     }
 
     // Returns the current in-memory width used by a note view mode.
@@ -38033,12 +38082,14 @@
     // Updates the active in-memory width and refreshes live modals.
     function setModalWidthForTarget(target, width) {
         const fallback = getModalWidthForTarget(target);
-        const normalizedWidth = normalizeModalWidth(width, fallback);
+        const normalizedWidth = normalizeModalWidth(target, width, fallback);
 
         if (target === 'editor') {
             currentEditorModalWidth = normalizedWidth;
+        } else if (target === 'preview') {
+            currentPreviewModalWidth = normalizedWidth;
         } else {
-            currentMarkdownModalWidth = normalizedWidth;
+            currentSplitModalWidth = normalizedWidth;
         }
 
         updateModalDimensions();
@@ -38206,8 +38257,6 @@
         handle.className = 'keep-md-resize-handle';
         handle.setAttribute('role', 'separator');
         handle.setAttribute('aria-orientation', 'vertical');
-        handle.setAttribute('aria-valuemin', String(MIN_MODAL_WIDTH));
-        handle.setAttribute('aria-valuemax', String(MAX_MODAL_WIDTH));
 
         const grip = document.createElement('span');
         grip.className = 'keep-md-resize-grip';
@@ -38247,9 +38296,15 @@
         }
 
         const label = VIEW_MODE_LABELS[context.viewMode];
+        const target = getModalWidthTarget(context.viewMode);
+        const limits = getModalWidthLimits(target);
+        const unit = getModalWidthUnit(target);
         const value = getModalWidthForMode(context.viewMode);
         context.resizeHandle.setAttribute('aria-label', `Resize ${label} width`);
+        context.resizeHandle.setAttribute('aria-valuemin', String(limits.min));
+        context.resizeHandle.setAttribute('aria-valuemax', String(limits.max));
         context.resizeHandle.setAttribute('aria-valuenow', String(value));
+        context.resizeHandle.setAttribute('aria-valuetext', `${value}${unit}`);
         context.resizeHandle.title = `Resize ${label} width`;
     }
 
@@ -38401,11 +38456,15 @@
         }
     }
 
-    // Converts a pointer x-coordinate into centered viewport width percentage.
-    function getWidthFromPointer(clientX) {
+    // Converts a pointer x-coordinate into the active mode's width unit.
+    function getWidthFromPointer(target, clientX) {
         const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
         const modalHalfWidth = clientX - (viewportWidth / 2);
-        return (modalHalfWidth * 2 / viewportWidth) * 100;
+        const widthPixels = modalHalfWidth * 2;
+
+        return target === 'editor'
+            ? widthPixels
+            : (widthPixels / viewportWidth) * 100;
     }
 
     // Handles drag resizing and persists the final width to sync storage.
@@ -38424,7 +38483,7 @@
         document.documentElement.classList.add('keep-md-is-resizing');
 
         const applyPointerWidth = (clientX) => {
-            pendingWidth = setModalWidthForTarget(target, getWidthFromPointer(clientX));
+            pendingWidth = setModalWidthForTarget(target, getWidthFromPointer(target, clientX));
         };
 
         const onPointerMove = (moveEvent) => {
@@ -38461,7 +38520,10 @@
     function resizeModalFromKeyboard(context, event) {
         const target = getModalWidthTarget(context.viewMode);
         const storageKey = getModalWidthStorageKey(target);
-        const step = event.shiftKey ? 5 : 1;
+        const limits = getModalWidthLimits(target);
+        const step = target === 'editor'
+            ? (event.shiftKey ? 80 : 20)
+            : (event.shiftKey ? 5 : 1);
         let width = getModalWidthForTarget(target);
 
         if (event.key === 'ArrowLeft') {
@@ -38469,9 +38531,9 @@
         } else if (event.key === 'ArrowRight') {
             width += step;
         } else if (event.key === 'Home') {
-            width = MIN_MODAL_WIDTH;
+            width = limits.min;
         } else if (event.key === 'End') {
-            width = MAX_MODAL_WIDTH;
+            width = limits.max;
         } else {
             return;
         }
@@ -38846,16 +38908,33 @@
     // Updates CSS variables consumed by extension/styles.css.
     function updateModalDimensions(widths = {}) {
         if (hasOwn(widths, EDITOR_MODAL_WIDTH_KEY)) {
-            currentEditorModalWidth = normalizeModalWidth(widths[EDITOR_MODAL_WIDTH_KEY], currentEditorModalWidth);
+            currentEditorModalWidth = normalizeModalWidth(
+                'editor',
+                widths[EDITOR_MODAL_WIDTH_KEY],
+                currentEditorModalWidth
+            );
         }
 
-        if (hasOwn(widths, MARKDOWN_MODAL_WIDTH_KEY)) {
-            currentMarkdownModalWidth = normalizeModalWidth(widths[MARKDOWN_MODAL_WIDTH_KEY], currentMarkdownModalWidth);
+        if (hasOwn(widths, SPLIT_MODAL_WIDTH_KEY)) {
+            currentSplitModalWidth = normalizeModalWidth(
+                'split',
+                widths[SPLIT_MODAL_WIDTH_KEY],
+                currentSplitModalWidth
+            );
+        }
+
+        if (hasOwn(widths, PREVIEW_MODAL_WIDTH_KEY)) {
+            currentPreviewModalWidth = normalizeModalWidth(
+                'preview',
+                widths[PREVIEW_MODAL_WIDTH_KEY],
+                currentPreviewModalWidth
+            );
         }
 
         const root = document.documentElement;
-        root.style.setProperty('--keep-md-editor-modal-width', `${currentEditorModalWidth}vw`);
-        root.style.setProperty('--keep-md-markdown-modal-width', `${currentMarkdownModalWidth}vw`);
+        root.style.setProperty('--keep-md-editor-modal-width', `${currentEditorModalWidth}px`);
+        root.style.setProperty('--keep-md-split-modal-width', `${currentSplitModalWidth}vw`);
+        root.style.setProperty('--keep-md-preview-modal-width', `${currentPreviewModalWidth}vw`);
     }
 
     // Reapplies the global default mode to notes that do not have per-note overrides.
@@ -38877,7 +38956,8 @@
         if (message.type === 'updateModalWidths') {
             updateModalDimensions({
                 [EDITOR_MODAL_WIDTH_KEY]: message.editorWidth,
-                [MARKDOWN_MODAL_WIDTH_KEY]: message.markdownWidth
+                [SPLIT_MODAL_WIDTH_KEY]: message.splitWidth,
+                [PREVIEW_MODAL_WIDTH_KEY]: message.previewWidth
             });
             updateAllResizeHandles();
             refreshAllScrollSyncContexts();
@@ -38914,16 +38994,27 @@
 
             if (changes[EDITOR_MODAL_WIDTH_KEY]) {
                 currentEditorModalWidth = normalizeModalWidth(
+                    'editor',
                     changes[EDITOR_MODAL_WIDTH_KEY].newValue,
                     currentEditorModalWidth
                 );
                 dimensionsChanged = true;
             }
 
-            if (changes[MARKDOWN_MODAL_WIDTH_KEY]) {
-                currentMarkdownModalWidth = normalizeModalWidth(
-                    changes[MARKDOWN_MODAL_WIDTH_KEY].newValue,
-                    currentMarkdownModalWidth
+            if (changes[SPLIT_MODAL_WIDTH_KEY]) {
+                currentSplitModalWidth = normalizeModalWidth(
+                    'split',
+                    changes[SPLIT_MODAL_WIDTH_KEY].newValue,
+                    currentSplitModalWidth
+                );
+                dimensionsChanged = true;
+            }
+
+            if (changes[PREVIEW_MODAL_WIDTH_KEY]) {
+                currentPreviewModalWidth = normalizeModalWidth(
+                    'preview',
+                    changes[PREVIEW_MODAL_WIDTH_KEY].newValue,
+                    currentPreviewModalWidth
                 );
                 dimensionsChanged = true;
             }
@@ -38988,14 +39079,28 @@
         // Load saved settings.
         chrome.storage.sync.get([
             EDITOR_MODAL_WIDTH_KEY,
-            MARKDOWN_MODAL_WIDTH_KEY,
+            SPLIT_MODAL_WIDTH_KEY,
+            PREVIEW_MODAL_WIDTH_KEY,
             DEFAULT_MARKDOWN_ENABLED_KEY,
             PREVIEW_THEME_KEY,
             PRESERVE_SOFT_LINE_BREAKS_KEY,
             SCROLL_SYNC_ENABLED_KEY
         ], function(result) {
-            currentEditorModalWidth = normalizeModalWidth(result[EDITOR_MODAL_WIDTH_KEY], DEFAULT_EDITOR_MODAL_WIDTH);
-            currentMarkdownModalWidth = normalizeModalWidth(result[MARKDOWN_MODAL_WIDTH_KEY], DEFAULT_MARKDOWN_MODAL_WIDTH);
+            currentEditorModalWidth = normalizeModalWidth(
+                'editor',
+                result[EDITOR_MODAL_WIDTH_KEY],
+                DEFAULT_EDITOR_MODAL_WIDTH
+            );
+            currentSplitModalWidth = normalizeModalWidth(
+                'split',
+                result[SPLIT_MODAL_WIDTH_KEY],
+                DEFAULT_SPLIT_MODAL_WIDTH
+            );
+            currentPreviewModalWidth = normalizeModalWidth(
+                'preview',
+                result[PREVIEW_MODAL_WIDTH_KEY],
+                DEFAULT_PREVIEW_MODAL_WIDTH
+            );
             defaultMarkdownEnabled = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
             const previewTheme = normalizePreviewTheme(result[PREVIEW_THEME_KEY]);
             preserveSoftLineBreaks = result[PRESERVE_SOFT_LINE_BREAKS_KEY] === true;

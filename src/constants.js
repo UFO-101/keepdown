@@ -28,8 +28,11 @@ export const KEEP_DARK_THEME_STYLESHEET_MARKER = '/am=BBDggA/';
 // Synced setting key for editor-only modal width.
 export const EDITOR_MODAL_WIDTH_KEY = 'editorModalWidth';
 
-// Synced setting key for markdown preview modal width.
-export const MARKDOWN_MODAL_WIDTH_KEY = 'markdownModalWidth';
+// Synced setting key for split editor-preview modal width.
+export const SPLIT_MODAL_WIDTH_KEY = 'splitModalWidth';
+
+// Synced setting key for preview-only modal width.
+export const PREVIEW_MODAL_WIDTH_KEY = 'previewModalWidth';
 
 // Synced setting key for the global default markdown behavior.
 export const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
@@ -46,17 +49,26 @@ export const SCROLL_SYNC_ENABLED_KEY = 'scrollSyncEnabled';
 // Local setting prefix for per-note view mode overrides.
 export const NOTE_MARKDOWN_MODE_PREFIX = 'noteMarkdownMode:';
 
-// Default modal width used when the note opens in editor-only mode.
-export const DEFAULT_EDITOR_MODAL_WIDTH = 64;
+// Default editor-only modal width mirrors Keep's native modal width.
+export const DEFAULT_EDITOR_MODAL_WIDTH = 600;
 
-// Default modal width used when the note opens with a preview.
-export const DEFAULT_MARKDOWN_MODAL_WIDTH = 75;
+// Default modal width used when the note opens in split mode.
+export const DEFAULT_SPLIT_MODAL_WIDTH = 75;
 
-// Minimum modal width allowed by sliders and drag handles.
-export const MIN_MODAL_WIDTH = 50;
+// Default modal width used when the note opens in preview-only mode.
+export const DEFAULT_PREVIEW_MODAL_WIDTH = 75;
 
-// Maximum modal width allowed by sliders and drag handles.
-export const MAX_MODAL_WIDTH = 95;
+// Minimum editor-only modal width allowed by sliders and drag handles.
+export const MIN_EDITOR_MODAL_WIDTH = 600;
+
+// Maximum editor-only modal width allowed by sliders and drag handles.
+export const MAX_EDITOR_MODAL_WIDTH = 1600;
+
+// Minimum split/preview modal width allowed by sliders and drag handles.
+export const MIN_MARKDOWN_MODAL_WIDTH = 50;
+
+// Maximum split/preview modal width allowed by sliders and drag handles.
+export const MAX_MARKDOWN_MODAL_WIDTH = 95;
 
 // Dark preview theme keeps the current KeepDown look.
 export const PREVIEW_THEME_DARK = 'dark';

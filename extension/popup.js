@@ -1,8 +1,11 @@
 // Synced setting key for editor-only modal width.
 const EDITOR_MODAL_WIDTH_KEY = 'editorModalWidth';
 
-// Synced setting key for markdown preview modal width.
-const MARKDOWN_MODAL_WIDTH_KEY = 'markdownModalWidth';
+// Synced setting key for split editor-preview modal width.
+const SPLIT_MODAL_WIDTH_KEY = 'splitModalWidth';
+
+// Synced setting key for preview-only modal width.
+const PREVIEW_MODAL_WIDTH_KEY = 'previewModalWidth';
 
 // Synced setting key for the global default markdown behavior.
 const DEFAULT_MARKDOWN_ENABLED_KEY = 'defaultMarkdownEnabled';
@@ -16,11 +19,14 @@ const PRESERVE_SOFT_LINE_BREAKS_KEY = 'preserveSoftLineBreaks';
 // Synced setting key for editor-to-preview scroll synchronization.
 const SCROLL_SYNC_ENABLED_KEY = 'scrollSyncEnabled';
 
-// Default width used when the note is in Editor mode.
-const DEFAULT_EDITOR_MODAL_WIDTH = '64';
+// Default editor-only width mirrors Keep's native modal width.
+const DEFAULT_EDITOR_MODAL_WIDTH = '600';
 
-// Default width used when the note shows markdown preview.
-const DEFAULT_MARKDOWN_MODAL_WIDTH = '75';
+// Default width used when the note is in Editor and Preview mode.
+const DEFAULT_SPLIT_MODAL_WIDTH = '75';
+
+// Default width used when the note is in Preview mode.
+const DEFAULT_PREVIEW_MODAL_WIDTH = '75';
 
 // Preview theme options exposed in popup settings.
 const PREVIEW_THEME_SYSTEM = 'system';
@@ -48,19 +54,29 @@ document.addEventListener('DOMContentLoaded', function() {
         {
             key: EDITOR_MODAL_WIDTH_KEY,
             messageKey: 'editorWidth',
+            unit: 'px',
             slider: document.getElementById('editor-width'),
             value: document.getElementById('editor-width-value')
         },
         {
-            key: MARKDOWN_MODAL_WIDTH_KEY,
-            messageKey: 'markdownWidth',
-            slider: document.getElementById('markdown-width'),
-            value: document.getElementById('markdown-width-value')
+            key: SPLIT_MODAL_WIDTH_KEY,
+            messageKey: 'splitWidth',
+            unit: '%',
+            slider: document.getElementById('split-width'),
+            value: document.getElementById('split-width-value')
+        },
+        {
+            key: PREVIEW_MODAL_WIDTH_KEY,
+            messageKey: 'previewWidth',
+            unit: '%',
+            slider: document.getElementById('preview-width'),
+            value: document.getElementById('preview-width-value')
         }
     ];
     const defaultSettings = {
         [EDITOR_MODAL_WIDTH_KEY]: DEFAULT_EDITOR_MODAL_WIDTH,
-        [MARKDOWN_MODAL_WIDTH_KEY]: DEFAULT_MARKDOWN_MODAL_WIDTH,
+        [SPLIT_MODAL_WIDTH_KEY]: DEFAULT_SPLIT_MODAL_WIDTH,
+        [PREVIEW_MODAL_WIDTH_KEY]: DEFAULT_PREVIEW_MODAL_WIDTH,
         [DEFAULT_MARKDOWN_ENABLED_KEY]: true,
         [PREVIEW_THEME_KEY]: DEFAULT_PREVIEW_THEME,
         [PRESERVE_SOFT_LINE_BREAKS_KEY]: DEFAULT_PRESERVE_SOFT_LINE_BREAKS,
@@ -74,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const max = Number(control.slider.max);
         const progress = ((numericValue - min) / (max - min)) * 100;
 
-        control.value.textContent = `${numericValue}%`;
+        control.value.textContent = `${numericValue}${control.unit}`;
         control.slider.style.setProperty('--slider-progress', `${progress}%`);
     }
 
@@ -133,7 +149,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (chromeApi?.storage?.sync) {
             chromeApi.storage.sync.get([
                 EDITOR_MODAL_WIDTH_KEY,
-                MARKDOWN_MODAL_WIDTH_KEY,
+                SPLIT_MODAL_WIDTH_KEY,
+                PREVIEW_MODAL_WIDTH_KEY,
                 DEFAULT_MARKDOWN_ENABLED_KEY,
                 PREVIEW_THEME_KEY,
                 PRESERVE_SOFT_LINE_BREAKS_KEY,
@@ -141,7 +158,8 @@ document.addEventListener('DOMContentLoaded', function() {
             ], function(result) {
                 applySettings({
                     [EDITOR_MODAL_WIDTH_KEY]: result[EDITOR_MODAL_WIDTH_KEY] || defaultSettings[EDITOR_MODAL_WIDTH_KEY],
-                    [MARKDOWN_MODAL_WIDTH_KEY]: result[MARKDOWN_MODAL_WIDTH_KEY] || defaultSettings[MARKDOWN_MODAL_WIDTH_KEY],
+                    [SPLIT_MODAL_WIDTH_KEY]: result[SPLIT_MODAL_WIDTH_KEY] || defaultSettings[SPLIT_MODAL_WIDTH_KEY],
+                    [PREVIEW_MODAL_WIDTH_KEY]: result[PREVIEW_MODAL_WIDTH_KEY] || defaultSettings[PREVIEW_MODAL_WIDTH_KEY],
                     [DEFAULT_MARKDOWN_ENABLED_KEY]: result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false,
                     [PREVIEW_THEME_KEY]: normalizePreviewTheme(result[PREVIEW_THEME_KEY] || defaultSettings[PREVIEW_THEME_KEY]),
                     [PRESERVE_SOFT_LINE_BREAKS_KEY]: result[PRESERVE_SOFT_LINE_BREAKS_KEY] === true,
@@ -285,7 +303,8 @@ document.addEventListener('DOMContentLoaded', function() {
             sendActiveTabMessage({
                 type: 'updateModalWidths',
                 editorWidth: defaultSettings[EDITOR_MODAL_WIDTH_KEY],
-                markdownWidth: defaultSettings[MARKDOWN_MODAL_WIDTH_KEY]
+                splitWidth: defaultSettings[SPLIT_MODAL_WIDTH_KEY],
+                previewWidth: defaultSettings[PREVIEW_MODAL_WIDTH_KEY]
             });
             sendActiveTabMessage({
                 type: 'updateDefaultMarkdownEnabled',

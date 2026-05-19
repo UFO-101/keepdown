@@ -469,9 +469,24 @@ Open the terminal and run the next command on a new line.
                         <label class="setting-title" for="editor-width">Editor width</label>
                         <div class="setting-note">Used when the note is in Editor mode.</div>
                     </div>
-                    <output class="value-badge" id="editor-width-value" for="editor-width">64%</output>
+                    <output class="value-badge" id="editor-width-value" for="editor-width">600px</output>
                 </div>
-                <input type="range" id="editor-width" min="50" max="95" value="64">
+                <input type="range" id="editor-width" min="600" max="1600" step="20" value="600">
+                <div class="range-scale">
+                    <span>600px</span>
+                    <span>1600px</span>
+                </div>
+            </div>
+
+            <div class="setting range-setting">
+                <div class="setting-row">
+                    <div>
+                        <label class="setting-title" for="split-width">Editor and Preview width</label>
+                        <div class="setting-note">Used when editor and preview are shown side by side.</div>
+                    </div>
+                    <output class="value-badge" id="split-width-value" for="split-width">75%</output>
+                </div>
+                <input type="range" id="split-width" min="50" max="95" value="75">
                 <div class="range-scale">
                     <span>50%</span>
                     <span>95%</span>
@@ -481,12 +496,12 @@ Open the terminal and run the next command on a new line.
             <div class="setting range-setting">
                 <div class="setting-row">
                     <div>
-                        <label class="setting-title" for="markdown-width">Preview modes width</label>
-                        <div class="setting-note">Used by Split and Preview modes.</div>
+                        <label class="setting-title" for="preview-width">Preview width</label>
+                        <div class="setting-note">Used when only the rendered Markdown preview is shown.</div>
                     </div>
-                    <output class="value-badge" id="markdown-width-value" for="markdown-width">75%</output>
+                    <output class="value-badge" id="preview-width-value" for="preview-width">75%</output>
                 </div>
-                <input type="range" id="markdown-width" min="50" max="95" value="75">
+                <input type="range" id="preview-width" min="50" max="95" value="75">
                 <div class="range-scale">
                     <span>50%</span>
                     <span>95%</span>
