@@ -781,6 +781,10 @@ function applyViewMode(context) {
 
 // Existing modal scans should not re-render markdown unless the editor DOM was rebuilt.
 function syncExistingContext(context) {
+    if (context.isInitializing) {
+        return;
+    }
+
     updateModalModeClasses(context);
     ensureResizeHandle(context);
     ensureViewModeControls(context);
@@ -869,6 +873,10 @@ async function handleNoteOpen(modalNote) {
         }
 
         existingContext.noteContent = currentParts?.noteContent || existingContext.noteContent;
+        if (existingContext.isInitializing) {
+            return;
+        }
+
         syncExistingContext(existingContext);
         return;
     }
@@ -906,7 +914,8 @@ async function handleNoteOpen(modalNote) {
         scrollSyncFrame: 0,
         previewResizeObserver: null,
         editorScrollListener: null,
-        paneWheelListener: null
+        paneWheelListener: null,
+        isInitializing: true
     };
 
     modalContexts.set(modalNote, context);
@@ -919,8 +928,21 @@ async function handleNoteOpen(modalNote) {
         return;
     }
 
+    if (modalContexts.get(modalNote) !== context) {
+        return;
+    }
+
+    const latestParts = getCurrentModalParts(modalNote);
+    if (isContextStale(context, latestParts)) {
+        rebuildContext(context);
+        return;
+    }
+
+    context.noteContent = latestParts?.noteContent || context.noteContent;
+    context.sourceColumn = latestParts?.sourceColumn || context.sourceColumn;
     context.viewMode = preference.viewMode;
     context.hasNoteOverride = preference.hasNoteOverride;
+    context.isInitializing = false;
     applyViewMode(context);
 }
 
