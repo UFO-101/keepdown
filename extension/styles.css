@@ -118,11 +118,6 @@
     background-color: rgba(95, 99, 104, 0.157) !important;
 }
 
-.keep-md-view-button:focus-visible {
-    outline: 2px solid #1a73e8 !important;
-    outline-offset: 2px !important;
-}
-
 /* Right-edge modal resize handle. */
 .keep-md-resize-handle {
     position: absolute !important;
@@ -146,13 +141,11 @@
 }
 
 .keep-md-modal:hover .keep-md-resize-handle,
-.keep-md-resize-handle:focus-visible,
 .keep-md-resize-handle.is-dragging {
     opacity: 1;
 }
 
 .keep-md-resize-handle:hover,
-.keep-md-resize-handle:focus-visible,
 .keep-md-resize-handle.is-dragging {
     background-color: rgba(95, 99, 104, 0.12) !important;
     outline: none !important;
@@ -168,7 +161,6 @@
 }
 
 .keep-md-resize-handle:hover .keep-md-resize-grip,
-.keep-md-resize-handle:focus-visible .keep-md-resize-grip,
 .keep-md-resize-handle.is-dragging .keep-md-resize-grip {
     background: rgba(32, 33, 36, 0.42) !important;
 }

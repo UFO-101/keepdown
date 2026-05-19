@@ -15,7 +15,7 @@ A Chrome extension that adds real-time Markdown preview to Google Keep notes. Wr
     - LaTeX math expressions supported
 - Optional paragraph soft line break preservation for command snippets and plain text lists
 - Per-note view mode persistence — each note remembers its last selected mode
-- Draggable resize handle with keyboard support for adjusting modal width on the fly
+- Draggable resize handle for adjusting modal width on the fly
 - System, Dark, and Light preview themes
 
 <img src="docs/screenshots/SummaryScreenshot.png" width="800" alt="Editing a note with markdown">

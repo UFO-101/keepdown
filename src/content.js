@@ -286,8 +286,6 @@ function createViewModeButton(context, mode) {
     const button = document.createElement('div');
     button.className = `Q0hgme-LgbsSe Q0hgme-Bz112c-LgbsSe keep-md-view-button keep-md-view-${mode} VIpgJd-LgbsSe`;
     button.dataset.viewMode = mode;
-    button.setAttribute('role', 'button');
-    button.setAttribute('tabindex', '0');
     button.title = VIEW_MODE_LABELS[mode];
     return button;
 }
@@ -305,20 +303,6 @@ function createViewModeControls(context) {
     controls.addEventListener('mousedown', stopKeepEvent, true);
     controls.addEventListener('touchstart', stopKeepEvent, true);
     controls.addEventListener('click', function(event) {
-        const button = event.target.closest('.keep-md-view-button');
-        if (!button || !controls.contains(button)) {
-            return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        setNoteViewMode(context, button.dataset.viewMode);
-    }, true);
-    controls.addEventListener('keydown', function(event) {
-        if (event.key !== 'Enter' && event.key !== ' ') {
-            return;
-        }
-
         const button = event.target.closest('.keep-md-view-button');
         if (!button || !controls.contains(button)) {
             return;
@@ -360,10 +344,7 @@ function ensureViewModeControls(context) {
 // Create a right-edge resize handle that writes back to the active mode's width setting.
 function createResizeHandle(context) {
     const handle = document.createElement('button');
-    handle.type = 'button';
     handle.className = 'keep-md-resize-handle';
-    handle.setAttribute('role', 'separator');
-    handle.setAttribute('aria-orientation', 'vertical');
 
     const grip = document.createElement('span');
     grip.className = 'keep-md-resize-grip';
@@ -371,9 +352,6 @@ function createResizeHandle(context) {
 
     handle.addEventListener('pointerdown', function(event) {
         startModalResize(context, event);
-    }, true);
-    handle.addEventListener('keydown', function(event) {
-        resizeModalFromKeyboard(context, event);
     }, true);
     handle.addEventListener('mousedown', stopKeepEvent, true);
     handle.addEventListener('touchstart', stopKeepEvent, true);
@@ -403,15 +381,6 @@ function updateResizeHandle(context) {
     }
 
     const label = VIEW_MODE_LABELS[context.viewMode];
-    const target = getModalWidthTarget(context.viewMode);
-    const limits = getModalWidthLimits(target);
-    const unit = getModalWidthUnit(target);
-    const value = getModalWidthForMode(context.viewMode);
-    context.resizeHandle.setAttribute('aria-label', `Resize ${label} width`);
-    context.resizeHandle.setAttribute('aria-valuemin', String(limits.min));
-    context.resizeHandle.setAttribute('aria-valuemax', String(limits.max));
-    context.resizeHandle.setAttribute('aria-valuenow', String(value));
-    context.resizeHandle.setAttribute('aria-valuetext', `${value}${unit}`);
     context.resizeHandle.title = `Resize ${label} width`;
 }
 
@@ -583,6 +552,7 @@ function startModalResize(context, event) {
     const target = getModalWidthTarget(context.viewMode);
     const storageKey = getModalWidthStorageKey(target);
     let pendingWidth = getModalWidthForTarget(target);
+    let didResize = false;
 
     event.preventDefault();
     event.stopPropagation();
@@ -591,6 +561,7 @@ function startModalResize(context, event) {
 
     const applyPointerWidth = (clientX) => {
         pendingWidth = setModalWidthForTarget(target, getWidthFromPointer(target, clientX));
+        didResize = true;
     };
 
     const onPointerMove = (moveEvent) => {
@@ -613,43 +584,15 @@ function startModalResize(context, event) {
         document.documentElement.classList.remove('keep-md-is-resizing');
         context.resizeHandle?.classList.remove('is-dragging');
 
-        await setSyncStorage({[storageKey]: String(pendingWidth)});
+        if (didResize) {
+            await setSyncStorage({[storageKey]: String(pendingWidth)});
+        }
     };
 
     context.resizeHandle?.setPointerCapture?.(event.pointerId);
-    applyPointerWidth(event.clientX);
     document.addEventListener('pointermove', onPointerMove, true);
     document.addEventListener('pointerup', finishResize, true);
     document.addEventListener('pointercancel', finishResize, true);
-}
-
-// Allows keyboard users to adjust modal width with arrow keys.
-function resizeModalFromKeyboard(context, event) {
-    const target = getModalWidthTarget(context.viewMode);
-    const storageKey = getModalWidthStorageKey(target);
-    const limits = getModalWidthLimits(target);
-    const step = target === 'editor'
-        ? (event.shiftKey ? 80 : 20)
-        : (event.shiftKey ? 5 : 1);
-    let width = getModalWidthForTarget(target);
-
-    if (event.key === 'ArrowLeft') {
-        width -= step;
-    } else if (event.key === 'ArrowRight') {
-        width += step;
-    } else if (event.key === 'Home') {
-        width = limits.min;
-    } else if (event.key === 'End') {
-        width = limits.max;
-    } else {
-        return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const normalizedWidth = setModalWidthForTarget(target, width);
-    setSyncStorage({[storageKey]: String(normalizedWidth)});
 }
 
 // Reflects the active view mode in button classes and accessibility labels.
@@ -666,8 +609,6 @@ function updateViewModeControls(context) {
         const label = VIEW_MODE_LABELS[mode];
 
         button.classList.toggle('is-active', isActive);
-        button.setAttribute('aria-pressed', String(isActive));
-        button.setAttribute('aria-label', label);
         button.setAttribute('data-tooltip-text', label);
         button.title = label;
     }
