@@ -243,6 +243,7 @@ function getVisibleSourceLine(metrics, scrollTop) {
 
 // Maps a source line to the best preview scroll target using anchor metadata.
 function getPreviewScrollTopForLine({currentLine, anchors, previewScrollHost, totalSourceLines}) {
+    const previewStartOffset = getPreviewStartOffset(anchors);
     const exactAnchor = selectBestExactAnchor(anchors, currentLine);
     if (exactAnchor) {
         const spanLineCount = Math.max(exactAnchor.endLine - exactAnchor.startLine + 1, 1);
@@ -257,7 +258,7 @@ function getPreviewScrollTopForLine({currentLine, anchors, previewScrollHost, to
             1,
             0
         );
-        return exactAnchor.top + (progress * spanHeight);
+        return normalizePreviewScrollTarget(exactAnchor.top + (progress * spanHeight), previewStartOffset);
     }
 
     let previousAnchor = null;
@@ -282,7 +283,10 @@ function getPreviewScrollTopForLine({currentLine, anchors, previewScrollHost, to
             1,
             0
         );
-        return previousAnchor.top + ((nextAnchor.top - previousAnchor.top) * progress);
+        return normalizePreviewScrollTarget(
+            previousAnchor.top + ((nextAnchor.top - previousAnchor.top) * progress),
+            previewStartOffset
+        );
     }
 
     if (previousAnchor) {
@@ -293,10 +297,29 @@ function getPreviewScrollTopForLine({currentLine, anchors, previewScrollHost, to
             1,
             0
         );
-        return previousAnchor.top + ((previewScrollHost.scrollHeight - previousAnchor.top) * progress);
+        return normalizePreviewScrollTarget(
+            previousAnchor.top + ((previewScrollHost.scrollHeight - previousAnchor.top) * progress),
+            previewStartOffset
+        );
     }
 
-    return nextAnchor ? nextAnchor.top : 0;
+    return nextAnchor ? normalizePreviewScrollTarget(nextAnchor.top, previewStartOffset) : 0;
+}
+
+// Keeps the first preview block visually at the top when the editor is also at the top.
+function getPreviewStartOffset(anchors) {
+    if (anchors.length === 0) {
+        return 0;
+    }
+
+    const firstSourceLine = anchors[0].startLine;
+    return anchors
+        .filter((anchor) => anchor.startLine === firstSourceLine)
+        .reduce((minimumTop, anchor) => Math.min(minimumTop, anchor.top), anchors[0].top);
+}
+
+function normalizePreviewScrollTarget(targetScrollTop, previewStartOffset) {
+    return Math.max(targetScrollTop - previewStartOffset, 0);
 }
 
 // Chooses the smallest matching block so nested paragraphs beat wider containers.
