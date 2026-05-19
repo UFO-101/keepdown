@@ -23,11 +23,12 @@ const DEFAULT_EDITOR_MODAL_WIDTH = '64';
 const DEFAULT_MARKDOWN_MODAL_WIDTH = '75';
 
 // Preview theme options exposed in popup settings.
+const PREVIEW_THEME_SYSTEM = 'system';
 const PREVIEW_THEME_DARK = 'dark';
 const PREVIEW_THEME_LIGHT = 'light';
 
-// Default preview theme keeps the current dark reading surface.
-const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
+// Default preview theme follows the browser color-scheme preference.
+const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_SYSTEM;
 
 // Default behavior keeps CommonMark soft line breaks collapsed.
 const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;
@@ -42,6 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const previewThemeInputs = Array.from(document.querySelectorAll('input[name="preview-theme"]'));
     const resetButton = document.getElementById('reset-settings');
     const chromeApi = typeof chrome === 'undefined' ? null : chrome;
+    const systemPreviewThemeQuery = window.matchMedia?.('(prefers-color-scheme: light)');
     const widthControls = [
         {
             key: EDITOR_MODAL_WIDTH_KEY,
@@ -83,14 +85,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Falls back to the supported preview theme when storage has unknown data.
     function normalizePreviewTheme(theme) {
-        return theme === PREVIEW_THEME_LIGHT ? PREVIEW_THEME_LIGHT : PREVIEW_THEME_DARK;
+        return [PREVIEW_THEME_SYSTEM, PREVIEW_THEME_DARK, PREVIEW_THEME_LIGHT].includes(theme)
+            ? theme
+            : DEFAULT_PREVIEW_THEME;
+    }
+
+    function getSystemPreviewTheme() {
+        return systemPreviewThemeQuery?.matches ? PREVIEW_THEME_LIGHT : PREVIEW_THEME_DARK;
+    }
+
+    function resolvePreviewTheme(theme) {
+        return theme === PREVIEW_THEME_SYSTEM ? getSystemPreviewTheme() : theme;
     }
 
     // Keeps the theme radios and the sample preview card aligned.
     function setPreviewTheme(theme) {
         const normalizedTheme = normalizePreviewTheme(theme);
 
-        document.body.dataset.previewTheme = normalizedTheme;
+        document.body.dataset.previewTheme = resolvePreviewTheme(normalizedTheme);
         for (const input of previewThemeInputs) {
             input.checked = input.value === normalizedTheme;
         }
@@ -160,6 +172,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     loadSettings();
+
+    systemPreviewThemeQuery?.addEventListener('change', function() {
+        const selectedTheme = previewThemeInputs.find((input) => input.checked)?.value;
+        if (selectedTheme === PREVIEW_THEME_SYSTEM) {
+            setPreviewTheme(PREVIEW_THEME_SYSTEM);
+        }
+    });
 
     // Save width changes and notify the content script immediately.
     for (const control of widthControls) {

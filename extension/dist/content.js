@@ -37150,6 +37150,15 @@
     // Keep's native pin button anchor where the view mode controls are inserted.
     const PIN_BUTTON_SELECTOR = '.IZ65Hb-s2gQvd > [aria-label="Pin note"], .IZ65Hb-s2gQvd > .IZ65Hb-nQ1Faf';
 
+    // Keep swaps this stylesheet when its own light/dark appearance changes.
+    const KEEP_THEME_STYLESHEET_SELECTOR = 'link[rel~="stylesheet"][href*="/_/apps-notes/_/ss/"][href*="/am="]';
+
+    // Known Keep stylesheet marker for the light appearance.
+    const KEEP_LIGHT_THEME_STYLESHEET_MARKER = '/am=BBDg/';
+
+    // Known Keep stylesheet marker for the dark appearance.
+    const KEEP_DARK_THEME_STYLESHEET_MARKER = '/am=BBDggA/';
+
     // Synced setting key for editor-only modal width.
     const EDITOR_MODAL_WIDTH_KEY = 'editorModalWidth';
 
@@ -37189,11 +37198,14 @@
     // Light preview theme matches Keep's brighter surfaces.
     const PREVIEW_THEME_LIGHT = 'light';
 
+    // System preview theme follows the browser color-scheme preference.
+    const PREVIEW_THEME_SYSTEM = 'system';
+
     // Preview theme shown in popup settings.
-    const PREVIEW_THEMES = [PREVIEW_THEME_DARK, PREVIEW_THEME_LIGHT];
+    const PREVIEW_THEMES = [PREVIEW_THEME_SYSTEM, PREVIEW_THEME_DARK, PREVIEW_THEME_LIGHT];
 
     // Default preview theme used for new installs and resets.
-    const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
+    const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_SYSTEM;
 
     // Default behavior keeps CommonMark soft line breaks collapsed.
     const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;
@@ -37795,6 +37807,10 @@
     // Current synced preference for editor-to-preview scroll alignment.
     let scrollSyncEnabled = DEFAULT_SCROLL_SYNC_ENABLED;
 
+    let systemPreviewThemeQuery = null;
+    let keepThemeStylesheetObserver = null;
+    let systemPreviewThemeFrame = 0;
+
     // Guards document-wide modal scans so multiple mutations collapse into one pass.
     let scanScheduled = false;
 
@@ -37858,10 +37874,55 @@
         return PREVIEW_THEMES.includes(theme) ? theme : DEFAULT_PREVIEW_THEME;
     }
 
+    // Uses Keep's own stylesheet swap first, then falls back to the browser setting.
+    function getSystemPreviewTheme() {
+        const keepTheme = getKeepPreviewThemeFromStylesheets();
+        if (keepTheme) {
+            return keepTheme;
+        }
+
+        const query = window.matchMedia?.('(prefers-color-scheme: light)');
+        return query?.matches ? PREVIEW_THEME_LIGHT : PREVIEW_THEME_DARK;
+    }
+
+    function resolvePreviewTheme(theme) {
+        return theme === PREVIEW_THEME_SYSTEM ? getSystemPreviewTheme() : theme;
+    }
+
+    function getKeepPreviewThemeFromStylesheets() {
+        const links = document.head?.querySelectorAll(KEEP_THEME_STYLESHEET_SELECTOR);
+        if (!links?.length) {
+            return null;
+        }
+
+        for (let index = links.length - 1; index >= 0; index -= 1) {
+            const link = links[index];
+            if (link.disabled || link.getAttribute('disabled') !== null) {
+                continue;
+            }
+
+            const href = link.href || '';
+            if (!href) {
+                continue;
+            }
+
+            if (href.includes(KEEP_DARK_THEME_STYLESHEET_MARKER)) {
+                return PREVIEW_THEME_DARK;
+            }
+
+            if (href.includes(KEEP_LIGHT_THEME_STYLESHEET_MARKER)) {
+                return PREVIEW_THEME_LIGHT;
+            }
+        }
+
+        return null;
+    }
+
     // Applies the active preview theme through CSS variables used by extension styles.
     function applyPreviewTheme(theme = currentPreviewTheme) {
         const normalizedTheme = normalizePreviewTheme(theme);
-        const tokens = PREVIEW_THEME_TOKENS[normalizedTheme];
+        const resolvedTheme = resolvePreviewTheme(normalizedTheme);
+        const tokens = PREVIEW_THEME_TOKENS[resolvedTheme];
         const root = document.documentElement;
 
         currentPreviewTheme = normalizedTheme;
@@ -37872,6 +37933,81 @@
         root.style.setProperty('--keep-md-preview-muted', tokens.muted);
         root.style.setProperty('--keep-md-preview-link', tokens.link);
         root.style.setProperty('--keep-md-preview-shadow', tokens.shadow);
+    }
+
+    function setupSystemPreviewThemeListener() {
+        if (!systemPreviewThemeQuery && window.matchMedia) {
+            systemPreviewThemeQuery = window.matchMedia('(prefers-color-scheme: light)');
+            systemPreviewThemeQuery.addEventListener('change', scheduleSystemPreviewThemeRefresh);
+        }
+
+        setupKeepThemeStylesheetObserver();
+    }
+
+    function setupKeepThemeStylesheetObserver() {
+        if (keepThemeStylesheetObserver || !document.head) {
+            return;
+        }
+
+        keepThemeStylesheetObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'attributes') {
+                    if (mutation.target?.matches?.(KEEP_THEME_STYLESHEET_SELECTOR)) {
+                        scheduleSystemPreviewThemeRefresh();
+                        return;
+                    }
+                    continue;
+                }
+
+                if (mutation.type === 'childList') {
+                    for (const node of mutation.addedNodes) {
+                        if (matchesKeepThemeStylesheetNode(node)) {
+                            scheduleSystemPreviewThemeRefresh();
+                            return;
+                        }
+                    }
+
+                    for (const node of mutation.removedNodes) {
+                        if (matchesKeepThemeStylesheetNode(node)) {
+                            scheduleSystemPreviewThemeRefresh();
+                            return;
+                        }
+                    }
+                }
+            }
+        });
+
+        keepThemeStylesheetObserver.observe(document.head, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['href', 'disabled', 'rel']
+        });
+    }
+
+    function matchesKeepThemeStylesheetNode(node) {
+        if (node?.nodeType !== Node.ELEMENT_NODE) {
+            return false;
+        }
+
+        if (node.matches?.(KEEP_THEME_STYLESHEET_SELECTOR)) {
+            return true;
+        }
+
+        return Boolean(node.querySelector?.(KEEP_THEME_STYLESHEET_SELECTOR));
+    }
+
+    function scheduleSystemPreviewThemeRefresh() {
+        if (currentPreviewTheme !== PREVIEW_THEME_SYSTEM || systemPreviewThemeFrame) {
+            return;
+        }
+
+        systemPreviewThemeFrame = requestAnimationFrame(() => {
+            systemPreviewThemeFrame = 0;
+            if (currentPreviewTheme === PREVIEW_THEME_SYSTEM) {
+                applyPreviewTheme(currentPreviewTheme);
+            }
+        });
     }
 
     // Applies the paragraph white-space mode used by markdown preview blocks.
@@ -38953,6 +39089,7 @@
     // Initializes settings, performs the first modal scan, and starts watching Keep DOM changes.
     function init() {
         console.log('Initializing Keep Markdown');
+        setupSystemPreviewThemeListener();
 
         // Load saved settings.
         chrome.storage.sync.get([
