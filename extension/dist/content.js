@@ -37992,7 +37992,25 @@
 
     // Keep's shared modal wheel handlers should not steal wheel gestures from split panes.
     function stopSplitPaneWheelPropagation(event) {
-        event.stopPropagation();
+        if (canScrollSplitPane(event.currentTarget, event.deltaY)) {
+            event.stopPropagation();
+        }
+    }
+
+    // Allows wheel events to bubble when the pane is already at an edge.
+    function canScrollSplitPane(element, deltaY) {
+        if (!element || deltaY === 0) {
+            return false;
+        }
+
+        const maxScrollTop = Math.max(element.scrollHeight - element.clientHeight, 0);
+        if (maxScrollTop <= 1) {
+            return false;
+        }
+
+        return deltaY < 0
+            ? element.scrollTop > 1
+            : element.scrollTop < maxScrollTop - 1;
     }
 
     // Creates a single view mode button using Keep-style DOM attributes.
@@ -38177,10 +38195,10 @@
         return element.getBoundingClientRect().height > 0;
     }
 
-    // Measures every visible block below the split body so title and footer keep their natural space.
+    // Measures visible modal chrome below the note body without letting Keep add-ons shrink split panes.
     function getReservedSplitPaneHeight(bodySection, modalSurface) {
         let reservedHeight = 0;
-        let current = bodySection;
+        let current = bodySection.parentElement;
 
         while (current && current !== modalSurface) {
             let sibling = current.nextElementSibling;
