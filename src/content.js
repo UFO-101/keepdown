@@ -21,6 +21,7 @@ import {
     DEFAULT_MARKDOWN_MODAL_WIDTH,
     DEFAULT_PRESERVE_SOFT_LINE_BREAKS,
     DEFAULT_PREVIEW_THEME,
+    DEFAULT_SCROLL_SYNC_ENABLED,
     EDITOR_MODAL_WIDTH_KEY,
     EXTENSION_OWNED_SELECTOR,
     MARKDOWN_MODAL_WIDTH_KEY,
@@ -36,6 +37,7 @@ import {
     PREVIEW_THEME_KEY,
     PREVIEW_THEME_LIGHT,
     PREVIEW_THEMES,
+    SCROLL_SYNC_ENABLED_KEY,
     VIEW_MODE_EDITOR,
     VIEW_MODE_LABELS,
     VIEW_MODE_PREVIEW,
@@ -59,6 +61,9 @@ let currentPreviewTheme = DEFAULT_PREVIEW_THEME;
 
 // Current synced paragraph line break preference for markdown panels.
 let preserveSoftLineBreaks = DEFAULT_PRESERVE_SOFT_LINE_BREAKS;
+
+// Current synced preference for editor-to-preview scroll alignment.
+let scrollSyncEnabled = DEFAULT_SCROLL_SYNC_ENABLED;
 
 // Guards document-wide modal scans so multiple mutations collapse into one pass.
 let scanScheduled = false;
@@ -522,7 +527,13 @@ function updateSplitPaneHeight(context) {
 // Keeps split-pane layout and scroll sync in lockstep after DOM, width, or viewport changes.
 function refreshContextScrollSync(context) {
     updateSplitPaneHeight(context);
-    refreshScrollSync(context);
+
+    if (scrollSyncEnabled) {
+        refreshScrollSync(context);
+        return;
+    }
+
+    teardownScrollSync(context);
 }
 
 // Recomputes split-view scroll sync after width or layout changes.
@@ -1109,6 +1120,12 @@ chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'updatePreserveSoftLineBreaks') {
         applySoftLineBreakPreference(message.value);
         refreshAllScrollSyncContexts();
+        return;
+    }
+
+    if (message.type === 'updateScrollSyncEnabled') {
+        scrollSyncEnabled = message.value !== false;
+        refreshAllScrollSyncContexts();
     }
 });
 
@@ -1153,6 +1170,11 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
             refreshAllScrollSyncContexts();
         }
 
+        if (changes[SCROLL_SYNC_ENABLED_KEY]) {
+            scrollSyncEnabled = changes[SCROLL_SYNC_ENABLED_KEY].newValue !== false;
+            refreshAllScrollSyncContexts();
+        }
+
         return;
     }
 
@@ -1190,13 +1212,15 @@ function init() {
         MARKDOWN_MODAL_WIDTH_KEY,
         DEFAULT_MARKDOWN_ENABLED_KEY,
         PREVIEW_THEME_KEY,
-        PRESERVE_SOFT_LINE_BREAKS_KEY
+        PRESERVE_SOFT_LINE_BREAKS_KEY,
+        SCROLL_SYNC_ENABLED_KEY
     ], function(result) {
         currentEditorModalWidth = normalizeModalWidth(result[EDITOR_MODAL_WIDTH_KEY], DEFAULT_EDITOR_MODAL_WIDTH);
         currentMarkdownModalWidth = normalizeModalWidth(result[MARKDOWN_MODAL_WIDTH_KEY], DEFAULT_MARKDOWN_MODAL_WIDTH);
         defaultMarkdownEnabled = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
         currentPreviewTheme = normalizePreviewTheme(result[PREVIEW_THEME_KEY]);
         preserveSoftLineBreaks = result[PRESERVE_SOFT_LINE_BREAKS_KEY] === true;
+        scrollSyncEnabled = result[SCROLL_SYNC_ENABLED_KEY] !== false;
         applyPreviewTheme(currentPreviewTheme);
         applySoftLineBreakPreference(preserveSoftLineBreaks);
         updateModalDimensions();

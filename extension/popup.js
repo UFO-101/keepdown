@@ -13,6 +13,9 @@ const PREVIEW_THEME_KEY = 'previewTheme';
 // Synced setting key for preserving soft line breaks in paragraphs.
 const PRESERVE_SOFT_LINE_BREAKS_KEY = 'preserveSoftLineBreaks';
 
+// Synced setting key for editor-to-preview scroll synchronization.
+const SCROLL_SYNC_ENABLED_KEY = 'scrollSyncEnabled';
+
 // Default width used when the note is in Editor mode.
 const DEFAULT_EDITOR_MODAL_WIDTH = '64';
 
@@ -29,8 +32,12 @@ const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
 // Default behavior keeps CommonMark soft line breaks collapsed.
 const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;
 
+// Default behavior keeps the preview aligned with editor scrolling.
+const DEFAULT_SCROLL_SYNC_ENABLED = true;
+
 document.addEventListener('DOMContentLoaded', function() {
     const defaultMarkdownToggle = document.getElementById('default-markdown');
+    const scrollSyncToggle = document.getElementById('scroll-sync');
     const preserveSoftBreaksToggle = document.getElementById('preserve-soft-breaks');
     const previewThemeInputs = Array.from(document.querySelectorAll('input[name="preview-theme"]'));
     const resetButton = document.getElementById('reset-settings');
@@ -54,7 +61,8 @@ document.addEventListener('DOMContentLoaded', function() {
         [MARKDOWN_MODAL_WIDTH_KEY]: DEFAULT_MARKDOWN_MODAL_WIDTH,
         [DEFAULT_MARKDOWN_ENABLED_KEY]: true,
         [PREVIEW_THEME_KEY]: DEFAULT_PREVIEW_THEME,
-        [PRESERVE_SOFT_LINE_BREAKS_KEY]: DEFAULT_PRESERVE_SOFT_LINE_BREAKS
+        [PRESERVE_SOFT_LINE_BREAKS_KEY]: DEFAULT_PRESERVE_SOFT_LINE_BREAKS,
+        [SCROLL_SYNC_ENABLED_KEY]: DEFAULT_SCROLL_SYNC_ENABLED
     };
 
     // Keep the range fill and value badge in sync.
@@ -103,6 +111,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         defaultMarkdownToggle.checked = settings[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
+        scrollSyncToggle.checked = settings[SCROLL_SYNC_ENABLED_KEY] !== false;
         setPreviewTheme(settings[PREVIEW_THEME_KEY]);
         setPreserveSoftBreaks(settings[PRESERVE_SOFT_LINE_BREAKS_KEY]);
     }
@@ -115,14 +124,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 MARKDOWN_MODAL_WIDTH_KEY,
                 DEFAULT_MARKDOWN_ENABLED_KEY,
                 PREVIEW_THEME_KEY,
-                PRESERVE_SOFT_LINE_BREAKS_KEY
+                PRESERVE_SOFT_LINE_BREAKS_KEY,
+                SCROLL_SYNC_ENABLED_KEY
             ], function(result) {
                 applySettings({
                     [EDITOR_MODAL_WIDTH_KEY]: result[EDITOR_MODAL_WIDTH_KEY] || defaultSettings[EDITOR_MODAL_WIDTH_KEY],
                     [MARKDOWN_MODAL_WIDTH_KEY]: result[MARKDOWN_MODAL_WIDTH_KEY] || defaultSettings[MARKDOWN_MODAL_WIDTH_KEY],
                     [DEFAULT_MARKDOWN_ENABLED_KEY]: result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false,
                     [PREVIEW_THEME_KEY]: normalizePreviewTheme(result[PREVIEW_THEME_KEY] || defaultSettings[PREVIEW_THEME_KEY]),
-                    [PRESERVE_SOFT_LINE_BREAKS_KEY]: result[PRESERVE_SOFT_LINE_BREAKS_KEY] === true
+                    [PRESERVE_SOFT_LINE_BREAKS_KEY]: result[PRESERVE_SOFT_LINE_BREAKS_KEY] === true,
+                    [SCROLL_SYNC_ENABLED_KEY]: result[SCROLL_SYNC_ENABLED_KEY] !== false
                 });
             });
             return;
@@ -184,6 +195,10 @@ document.addEventListener('DOMContentLoaded', function() {
             defaultMarkdownToggle.checked = changes[DEFAULT_MARKDOWN_ENABLED_KEY].newValue !== false;
         }
 
+        if (changes[SCROLL_SYNC_ENABLED_KEY]) {
+            scrollSyncToggle.checked = changes[SCROLL_SYNC_ENABLED_KEY].newValue !== false;
+        }
+
         if (changes[PREVIEW_THEME_KEY]) {
             setPreviewTheme(changes[PREVIEW_THEME_KEY].newValue);
         }
@@ -199,6 +214,16 @@ document.addEventListener('DOMContentLoaded', function() {
         chromeApi?.storage?.sync?.set({[DEFAULT_MARKDOWN_ENABLED_KEY]: enabled});
         sendActiveTabMessage({
             type: 'updateDefaultMarkdownEnabled',
+            value: enabled
+        });
+    });
+
+    scrollSyncToggle.addEventListener('change', function() {
+        const enabled = this.checked;
+
+        chromeApi?.storage?.sync?.set({[SCROLL_SYNC_ENABLED_KEY]: enabled});
+        sendActiveTabMessage({
+            type: 'updateScrollSyncEnabled',
             value: enabled
         });
     });
@@ -254,6 +279,10 @@ document.addEventListener('DOMContentLoaded', function() {
             sendActiveTabMessage({
                 type: 'updatePreserveSoftLineBreaks',
                 value: defaultSettings[PRESERVE_SOFT_LINE_BREAKS_KEY]
+            });
+            sendActiveTabMessage({
+                type: 'updateScrollSyncEnabled',
+                value: defaultSettings[SCROLL_SYNC_ENABLED_KEY]
             });
             loadSettings();
         });

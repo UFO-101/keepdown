@@ -31,6 +31,9 @@ export const PREVIEW_THEME_KEY = 'previewTheme';
 // Synced setting key for preserving soft line breaks in paragraphs.
 export const PRESERVE_SOFT_LINE_BREAKS_KEY = 'preserveSoftLineBreaks';
 
+// Synced setting key for editor-to-preview scroll synchronization.
+export const SCROLL_SYNC_ENABLED_KEY = 'scrollSyncEnabled';
+
 // Local setting prefix for per-note view mode overrides.
 export const NOTE_MARKDOWN_MODE_PREFIX = 'noteMarkdownMode:';
 
@@ -60,6 +63,9 @@ export const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
 
 // Default behavior keeps CommonMark soft line breaks collapsed.
 export const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;
+
+// Default behavior keeps the preview aligned with editor scrolling.
+export const DEFAULT_SCROLL_SYNC_ENABLED = true;
 
 // Preview block attribute for the first markdown source line covered by a block.
 export const PREVIEW_SOURCE_START_LINE_ATTRIBUTE = 'data-keep-md-source-start-line';

@@ -8,7 +8,7 @@ A Chrome extension that adds real-time Markdown preview to Google Keep notes. Wr
 
 - Real-time side-by-side Markdown preview
 - Three Markdown view modes: **Editor** / **Editor and Preview** / **Preview**
-- Automatic editor-to-preview scroll sync in **Editor and Preview** mode
+- Optional editor-to-preview scroll sync in **Editor and Preview** mode
 - Built on top of [micromark](https://github.com/micromark/micromark)
     - 100% CommonMark compliant
     - GitHub Flavored Markdown supported
@@ -25,7 +25,7 @@ A Chrome extension that adds real-time Markdown preview to Google Keep notes. Wr
 A three-button toggle is added next to Keep's "Pin note" button inside the modal:
 
 - **Editor** — Default Google Keep editing view, no Markdown preview
-- **Editor and Preview** — Side-by-side editor and rendered Markdown preview, with preview scrolling following the editor automatically
+- **Editor and Preview** — Side-by-side editor and rendered Markdown preview, with optional preview scrolling that follows the editor
 - **Preview** — Rendered Markdown only, editor hidden
 
 The active mode is saved per-note, so each note remembers its own view preference.
@@ -35,6 +35,7 @@ The active mode is saved per-note, so each note remembers its own view preferenc
 Click the extension icon to open the settings popup:
 
 - **Markdown by default** — Toggle whether new notes open in Split mode or Editor mode
+- **Sync editor scroll** — Toggle whether the preview follows editor scrolling in Split mode; enabled by default
 - **Preview theme** — Switch the Markdown preview between Dark and Light themes, with a live preview sample
 - **Preserve soft line breaks** — Keep single line breaks visible inside normal paragraphs; disabled by default to preserve standard CommonMark rendering
 - **Editor width** — Slider (50%–95%) to control modal width in Editor-only mode
@@ -64,7 +65,7 @@ This extension uses minimal permissions:
   All processing is done locally in your browser.
 
 ### storage Permission
-- Used to save your preferences (such as note modal widths, preview theme, and paragraph line break behavior) between browser sessions. This ensures your customized settings persist after closing and reopening your browser.
+- Used to save your preferences (such as note modal widths, preview theme, scroll sync, and paragraph line break behavior) between browser sessions. This ensures your customized settings persist after closing and reopening your browser.
 
 ## Getting Started
 
