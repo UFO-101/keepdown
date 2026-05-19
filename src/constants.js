@@ -64,7 +64,7 @@ export const PREVIEW_THEME_DARK = 'dark';
 // Light preview theme matches Keep's brighter surfaces.
 export const PREVIEW_THEME_LIGHT = 'light';
 
-// System preview theme follows the browser color-scheme preference.
+// System preview theme follows Keep first, then the browser color-scheme preference.
 export const PREVIEW_THEME_SYSTEM = 'system';
 
 // Preview theme shown in popup settings.

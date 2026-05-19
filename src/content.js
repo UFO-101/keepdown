@@ -16,17 +16,18 @@ import {
     teardownScrollSync
 } from './scroll-sync.js';
 import {
+    applyPreviewTheme,
+    normalizePreviewTheme,
+    setupPreviewThemeSync
+} from './preview-theme.js';
+import {
     DEFAULT_EDITOR_MODAL_WIDTH,
     DEFAULT_MARKDOWN_ENABLED_KEY,
     DEFAULT_MARKDOWN_MODAL_WIDTH,
     DEFAULT_PRESERVE_SOFT_LINE_BREAKS,
-    DEFAULT_PREVIEW_THEME,
     DEFAULT_SCROLL_SYNC_ENABLED,
     EDITOR_MODAL_WIDTH_KEY,
     EXTENSION_OWNED_SELECTOR,
-    KEEP_DARK_THEME_STYLESHEET_MARKER,
-    KEEP_LIGHT_THEME_STYLESHEET_MARKER,
-    KEEP_THEME_STYLESHEET_SELECTOR,
     MARKDOWN_MODAL_WIDTH_KEY,
     MAX_MODAL_WIDTH,
     MIN_MODAL_WIDTH,
@@ -36,11 +37,7 @@ import {
     NOTE_SOURCE_COLUMN_SELECTOR,
     PIN_BUTTON_SELECTOR,
     PRESERVE_SOFT_LINE_BREAKS_KEY,
-    PREVIEW_THEME_DARK,
     PREVIEW_THEME_KEY,
-    PREVIEW_THEME_LIGHT,
-    PREVIEW_THEME_SYSTEM,
-    PREVIEW_THEMES,
     SCROLL_SYNC_ENABLED_KEY,
     VIEW_MODE_EDITOR,
     VIEW_MODE_LABELS,
@@ -60,18 +57,11 @@ let currentMarkdownModalWidth = DEFAULT_MARKDOWN_MODAL_WIDTH;
 // Global default for opening notes in markdown mode.
 let defaultMarkdownEnabled = true;
 
-// Current synced preview theme for markdown panels.
-let currentPreviewTheme = DEFAULT_PREVIEW_THEME;
-
 // Current synced paragraph line break preference for markdown panels.
 let preserveSoftLineBreaks = DEFAULT_PRESERVE_SOFT_LINE_BREAKS;
 
 // Current synced preference for editor-to-preview scroll alignment.
 let scrollSyncEnabled = DEFAULT_SCROLL_SYNC_ENABLED;
-
-let systemPreviewThemeQuery = null;
-let keepThemeStylesheetObserver = null;
-let systemPreviewThemeFrame = 0;
 
 // Guards document-wide modal scans so multiple mutations collapse into one pass.
 let scanScheduled = false;
@@ -87,28 +77,6 @@ const modalContexts = new WeakMap();
 
 // Iterable set of live modal contexts for cleanup and storage sync updates.
 const modalContextSet = new Set();
-
-// Shared preview color tokens applied to Keep's live markdown panel.
-const PREVIEW_THEME_TOKENS = {
-    [PREVIEW_THEME_DARK]: {
-        background: '#2a2b2e',
-        text: '#e8eaed',
-        surface: '#303134',
-        border: '#5f6368',
-        muted: '#9aa0a6',
-        link: '#8ab4f8',
-        shadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-    },
-    [PREVIEW_THEME_LIGHT]: {
-        background: '#ffffff',
-        text: '#202124',
-        surface: '#f1f3f4',
-        border: '#d7dce5',
-        muted: '#5f6368',
-        link: '#1a73e8',
-        shadow: '0 10px 24px rgba(32, 33, 36, 0.08)'
-    }
-};
 
 // Google Keep's editor markup changes often, so selectors are tried from oldest to newest.
 function findNoteContent(root) {
@@ -129,147 +97,6 @@ function getLocationNoteKey() {
 // Returns the default mode to use when a note has no per-note override.
 function getDefaultViewMode() {
     return defaultMarkdownEnabled ? VIEW_MODE_SPLIT : VIEW_MODE_EDITOR;
-}
-
-// Validates preview themes loaded from storage before styling the preview panel.
-function normalizePreviewTheme(theme) {
-    return PREVIEW_THEMES.includes(theme) ? theme : DEFAULT_PREVIEW_THEME;
-}
-
-// Uses Keep's own stylesheet swap first, then falls back to the browser setting.
-function getSystemPreviewTheme() {
-    const keepTheme = getKeepPreviewThemeFromStylesheets();
-    if (keepTheme) {
-        return keepTheme;
-    }
-
-    const query = window.matchMedia?.('(prefers-color-scheme: light)');
-    return query?.matches ? PREVIEW_THEME_LIGHT : PREVIEW_THEME_DARK;
-}
-
-function resolvePreviewTheme(theme) {
-    return theme === PREVIEW_THEME_SYSTEM ? getSystemPreviewTheme() : theme;
-}
-
-function getKeepPreviewThemeFromStylesheets() {
-    const links = document.head?.querySelectorAll(KEEP_THEME_STYLESHEET_SELECTOR);
-    if (!links?.length) {
-        return null;
-    }
-
-    for (let index = links.length - 1; index >= 0; index -= 1) {
-        const link = links[index];
-        if (link.disabled || link.getAttribute('disabled') !== null) {
-            continue;
-        }
-
-        const href = link.href || '';
-        if (!href) {
-            continue;
-        }
-
-        if (href.includes(KEEP_DARK_THEME_STYLESHEET_MARKER)) {
-            return PREVIEW_THEME_DARK;
-        }
-
-        if (href.includes(KEEP_LIGHT_THEME_STYLESHEET_MARKER)) {
-            return PREVIEW_THEME_LIGHT;
-        }
-    }
-
-    return null;
-}
-
-// Applies the active preview theme through CSS variables used by extension styles.
-function applyPreviewTheme(theme = currentPreviewTheme) {
-    const normalizedTheme = normalizePreviewTheme(theme);
-    const resolvedTheme = resolvePreviewTheme(normalizedTheme);
-    const tokens = PREVIEW_THEME_TOKENS[resolvedTheme];
-    const root = document.documentElement;
-
-    currentPreviewTheme = normalizedTheme;
-    root.style.setProperty('--keep-md-preview-bg', tokens.background);
-    root.style.setProperty('--keep-md-preview-text', tokens.text);
-    root.style.setProperty('--keep-md-preview-surface', tokens.surface);
-    root.style.setProperty('--keep-md-preview-border', tokens.border);
-    root.style.setProperty('--keep-md-preview-muted', tokens.muted);
-    root.style.setProperty('--keep-md-preview-link', tokens.link);
-    root.style.setProperty('--keep-md-preview-shadow', tokens.shadow);
-}
-
-function setupSystemPreviewThemeListener() {
-    if (!systemPreviewThemeQuery && window.matchMedia) {
-        systemPreviewThemeQuery = window.matchMedia('(prefers-color-scheme: light)');
-        systemPreviewThemeQuery.addEventListener('change', scheduleSystemPreviewThemeRefresh);
-    }
-
-    setupKeepThemeStylesheetObserver();
-}
-
-function setupKeepThemeStylesheetObserver() {
-    if (keepThemeStylesheetObserver || !document.head) {
-        return;
-    }
-
-    keepThemeStylesheetObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-            if (mutation.type === 'attributes') {
-                if (mutation.target?.matches?.(KEEP_THEME_STYLESHEET_SELECTOR)) {
-                    scheduleSystemPreviewThemeRefresh();
-                    return;
-                }
-                continue;
-            }
-
-            if (mutation.type === 'childList') {
-                for (const node of mutation.addedNodes) {
-                    if (matchesKeepThemeStylesheetNode(node)) {
-                        scheduleSystemPreviewThemeRefresh();
-                        return;
-                    }
-                }
-
-                for (const node of mutation.removedNodes) {
-                    if (matchesKeepThemeStylesheetNode(node)) {
-                        scheduleSystemPreviewThemeRefresh();
-                        return;
-                    }
-                }
-            }
-        }
-    });
-
-    keepThemeStylesheetObserver.observe(document.head, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['href', 'disabled', 'rel']
-    });
-}
-
-function matchesKeepThemeStylesheetNode(node) {
-    if (node?.nodeType !== Node.ELEMENT_NODE) {
-        return false;
-    }
-
-    if (node.matches?.(KEEP_THEME_STYLESHEET_SELECTOR)) {
-        return true;
-    }
-
-    return Boolean(node.querySelector?.(KEEP_THEME_STYLESHEET_SELECTOR));
-}
-
-function scheduleSystemPreviewThemeRefresh() {
-    if (currentPreviewTheme !== PREVIEW_THEME_SYSTEM || systemPreviewThemeFrame) {
-        return;
-    }
-
-    systemPreviewThemeFrame = requestAnimationFrame(() => {
-        systemPreviewThemeFrame = 0;
-        if (currentPreviewTheme === PREVIEW_THEME_SYSTEM) {
-            applyPreviewTheme(currentPreviewTheme);
-        }
-    });
 }
 
 // Applies the paragraph white-space mode used by markdown preview blocks.
@@ -1131,9 +958,8 @@ function cleanupDisconnectedContexts() {
     }
 }
 
-// Rebuilds the injected modal style from the current width settings.
+// Updates CSS variables consumed by extension/styles.css.
 function updateModalDimensions(widths = {}) {
-    // Update stored width values before regenerating the modal override style.
     if (hasOwn(widths, EDITOR_MODAL_WIDTH_KEY)) {
         currentEditorModalWidth = normalizeModalWidth(widths[EDITOR_MODAL_WIDTH_KEY], currentEditorModalWidth);
     }
@@ -1142,88 +968,9 @@ function updateModalDimensions(widths = {}) {
         currentMarkdownModalWidth = normalizeModalWidth(widths[MARKDOWN_MODAL_WIDTH_KEY], currentMarkdownModalWidth);
     }
 
-    const style = document.createElement('style');
-    style.textContent = `
-        /* Target the outer modal container. */
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal {
-            position: fixed !important;
-            height: auto !important;
-            max-height: 95vh !important;
-            left: 50% !important;
-            top: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            overflow: visible !important;
-        }
-
-        /* Editor-only width. */
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-editor {
-            width: ${currentEditorModalWidth}vw !important;
-        }
-
-        /* Shared width for Editor and Preview / Preview modes. */
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split,
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-preview {
-            width: ${currentMarkdownModalWidth}vw !important;
-        }
-
-        /* Allow modal to scroll if content is very tall. */
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-n0tgWb,
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-TBnied,
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-s2gQvd,
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-r4nke-haAclf,
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-qJTHM-haAclf,
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .fmcmS-h1U9Be-LS81yb {
-            width: 100% !important;
-            max-width: none !important;
-            height: auto !important;
-            overflow-y: auto !important;
-            box-sizing: border-box !important;
-        }
-
-        /* Split mode keeps Keep's title/footer natural and constrains only the note body. */
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .IZ65Hb-qJTHM-haAclf,
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-container {
-            overflow: hidden !important;
-        }
-
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-container {
-            align-items: stretch !important;
-            height: var(--keep-md-split-pane-height, auto) !important;
-            min-height: 0 !important;
-        }
-
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-source,
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-preview {
-            flex: 1 1 0 !important;
-            height: var(--keep-md-split-pane-height, auto) !important;
-            min-height: 0 !important;
-            max-height: none !important;
-            align-self: stretch !important;
-            box-sizing: border-box !important;
-            overscroll-behavior: contain !important;
-            overflow-y: auto !important;
-            scrollbar-gutter: stable both-edges !important;
-        }
-
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-preview {
-            margin: 0 !important;
-            padding-bottom: 32px !important;
-        }
-
-        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-source {
-            padding-right: 8px !important;
-            padding-bottom: 32px !important;
-        }
-    `;
-
-    // Remove any previous style element we added.
-    const existingStyle = document.getElementById('keep-md-modal-style');
-    if (existingStyle) {
-        existingStyle.remove();
-    }
-
-    style.id = 'keep-md-modal-style';
-    document.head.appendChild(style);
+    const root = document.documentElement;
+    root.style.setProperty('--keep-md-editor-modal-width', `${currentEditorModalWidth}vw`);
+    root.style.setProperty('--keep-md-markdown-modal-width', `${currentMarkdownModalWidth}vw`);
 }
 
 // Reapplies the global default mode to notes that do not have per-note overrides.
@@ -1351,7 +1098,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 // Initializes settings, performs the first modal scan, and starts watching Keep DOM changes.
 function init() {
     console.log('Initializing Keep Markdown');
-    setupSystemPreviewThemeListener();
+    setupPreviewThemeSync();
 
     // Load saved settings.
     chrome.storage.sync.get([
@@ -1365,10 +1112,10 @@ function init() {
         currentEditorModalWidth = normalizeModalWidth(result[EDITOR_MODAL_WIDTH_KEY], DEFAULT_EDITOR_MODAL_WIDTH);
         currentMarkdownModalWidth = normalizeModalWidth(result[MARKDOWN_MODAL_WIDTH_KEY], DEFAULT_MARKDOWN_MODAL_WIDTH);
         defaultMarkdownEnabled = result[DEFAULT_MARKDOWN_ENABLED_KEY] !== false;
-        currentPreviewTheme = normalizePreviewTheme(result[PREVIEW_THEME_KEY]);
+        const previewTheme = normalizePreviewTheme(result[PREVIEW_THEME_KEY]);
         preserveSoftLineBreaks = result[PRESERVE_SOFT_LINE_BREAKS_KEY] === true;
         scrollSyncEnabled = result[SCROLL_SYNC_ENABLED_KEY] !== false;
-        applyPreviewTheme(currentPreviewTheme);
+        applyPreviewTheme(previewTheme);
         applySoftLineBreakPreference(preserveSoftLineBreaks);
         updateModalDimensions();
         scanOpenModals();

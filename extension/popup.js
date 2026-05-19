@@ -27,7 +27,7 @@ const PREVIEW_THEME_SYSTEM = 'system';
 const PREVIEW_THEME_DARK = 'dark';
 const PREVIEW_THEME_LIGHT = 'light';
 
-// Default preview theme follows the browser color-scheme preference.
+// Default preview theme follows the content script's system theme resolution.
 const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_SYSTEM;
 
 // Default behavior keeps CommonMark soft line breaks collapsed.

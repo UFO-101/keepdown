@@ -1,5 +1,7 @@
 /* Our styles with distinct prefixes */
 :root {
+    --keep-md-editor-modal-width: 64vw;
+    --keep-md-markdown-modal-width: 75vw;
     --keep-md-preview-bg: #2a2b2e;
     --keep-md-preview-text: #e8eaed;
     --keep-md-preview-surface: #303134;
@@ -10,9 +12,29 @@
     --keep-md-preview-paragraph-white-space: normal;
 }
 
+:root[data-keep-md-preview-theme="dark"] {
+    --keep-md-preview-bg: #2a2b2e;
+    --keep-md-preview-text: #e8eaed;
+    --keep-md-preview-surface: #303134;
+    --keep-md-preview-border: #5f6368;
+    --keep-md-preview-muted: #9aa0a6;
+    --keep-md-preview-link: #8ab4f8;
+    --keep-md-preview-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-keep-md-preview-theme="light"] {
+    --keep-md-preview-bg: #ffffff;
+    --keep-md-preview-text: #202124;
+    --keep-md-preview-surface: #f1f3f4;
+    --keep-md-preview-border: #d7dce5;
+    --keep-md-preview-muted: #5f6368;
+    --keep-md-preview-link: #1a73e8;
+    --keep-md-preview-shadow: 0 10px 24px rgba(32, 33, 36, 0.08);
+}
+
 .keep-md-container {
     display: flex;
-    gap: 32px;
+    gap: 8px;
     width: 100%;
     min-width: 0;
     align-items: flex-start;  /* Split mode overrides this to create matching scroll panes. */
@@ -36,9 +58,7 @@
     transition: opacity .218s ease-in;
 }
 
-.XKSfm-L9AdLc .IZ65Hb-n0tgWb .keep-md-view-controls,
-.h1U9Be-xhiy4 .IZ65Hb-n0tgWb .keep-md-view-controls,
-.IZ65Hb-n0tgWb.cb6R2e-AHmuwe .keep-md-view-controls {
+.keep-md-modal .keep-md-view-controls {
     top: 12px !important;
     right: 48px !important;
     opacity: .71;
@@ -283,8 +303,8 @@ html.keep-md-is-resizing * {
     text-decoration: underline;
 }
 
-/* Target the outer modal container */
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal {
+/* Target the outer modal container. */
+.keep-md-modal {
     position: fixed !important;
     height: auto !important;
     max-height: 95vh !important;
@@ -295,18 +315,18 @@ html.keep-md-is-resizing * {
 }
 
 /* Editor-only modal width. */
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-editor {
-    width: 64vw !important;
+.keep-md-mode-editor {
+    width: var(--keep-md-editor-modal-width) !important;
 }
 
 /* Shared modal width for Editor and Preview / Preview modes. */
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split,
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-preview {
-    width: 75vw !important;
+.keep-md-mode-split,
+.keep-md-mode-preview {
+    width: var(--keep-md-markdown-modal-width) !important;
 }
 
-/* Target the inner modal container */
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-n0tgWb {
+/* Target the inner modal container. */
+.keep-md-modal .IZ65Hb-n0tgWb {
     width: 100% !important;
     max-width: none !important;
     height: auto !important;
@@ -314,12 +334,12 @@ html.keep-md-is-resizing * {
     box-sizing: border-box !important;
 }
 
-/* Ensure all nested containers expand */
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-TBnied,
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-s2gQvd,
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-r4nke-haAclf,
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-qJTHM-haAclf,
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .fmcmS-h1U9Be-LS81yb {
+/* Ensure Keep's nested modal containers expand. */
+.keep-md-modal .IZ65Hb-TBnied,
+.keep-md-modal .IZ65Hb-s2gQvd,
+.keep-md-modal .IZ65Hb-r4nke-haAclf,
+.keep-md-modal .IZ65Hb-qJTHM-haAclf,
+.keep-md-modal .fmcmS-h1U9Be-LS81yb {
     width: 100% !important;
     max-width: none !important;
     height: auto !important;
@@ -327,27 +347,47 @@ html.keep-md-is-resizing * {
     box-sizing: border-box !important;
 }
 
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-nQ1Faf-cQwEuf {
+.keep-md-modal .IZ65Hb-nQ1Faf-cQwEuf {
     display: none !important;
 }
 
-.VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-modal .IZ65Hb-r4nke-haAclf {
+.keep-md-modal .IZ65Hb-r4nke-haAclf {
     padding-bottom: 12px !important;
 }
 
+/* Split mode keeps Keep's title/footer natural and constrains only the note body. */
+.keep-md-mode-split .IZ65Hb-qJTHM-haAclf,
+.keep-md-mode-split .keep-md-container {
+    overflow: hidden !important;
+}
 
+.keep-md-mode-split .keep-md-container {
+    align-items: stretch !important;
+    height: var(--keep-md-split-pane-height, auto) !important;
+    min-height: 0 !important;
+}
 
-/* Remove the general container targeting */
-/* .VIpgJd-TUo6Hb.XKSfm-L9AdLc * {
-    max-width: none;
-} */
+.keep-md-mode-split .keep-md-source,
+.keep-md-mode-split .keep-md-preview {
+    flex: 1 1 0 !important;
+    height: var(--keep-md-split-pane-height, auto) !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    align-self: stretch !important;
+    box-sizing: border-box !important;
+    overscroll-behavior: contain !important;
+    overflow-y: auto !important;
+    scrollbar-gutter: stable both-edges !important;
+}
 
-/* Container layout */
-.keep-md-container {
-    display: flex;
-    gap: 8px;
-    width: 100%;
-    min-width: 0;
+.keep-md-mode-split .keep-md-preview {
+    margin: 0 !important;
+    padding-bottom: 32px !important;
+}
+
+.keep-md-mode-split .keep-md-source {
+    padding-right: 8px !important;
+    padding-bottom: 32px !important;
 }
 
 /* Math styling */
