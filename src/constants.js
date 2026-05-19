@@ -16,6 +16,15 @@ export const NOTE_SOURCE_COLUMN_SELECTOR = '.IZ65Hb-qJTHM-haAclf, .fmcmS-h1U9Be-
 // Keep's native pin button anchor where the view mode controls are inserted.
 export const PIN_BUTTON_SELECTOR = '.IZ65Hb-s2gQvd > [aria-label="Pin note"], .IZ65Hb-s2gQvd > .IZ65Hb-nQ1Faf';
 
+// Keep swaps this stylesheet when its own light/dark appearance changes.
+export const KEEP_THEME_STYLESHEET_SELECTOR = 'link[rel~="stylesheet"][href*="/_/apps-notes/_/ss/"][href*="/am="]';
+
+// Known Keep stylesheet marker for the light appearance.
+export const KEEP_LIGHT_THEME_STYLESHEET_MARKER = '/am=BBDg/';
+
+// Known Keep stylesheet marker for the dark appearance.
+export const KEEP_DARK_THEME_STYLESHEET_MARKER = '/am=BBDggA/';
+
 // Synced setting key for editor-only modal width.
 export const EDITOR_MODAL_WIDTH_KEY = 'editorModalWidth';
 
@@ -55,11 +64,14 @@ export const PREVIEW_THEME_DARK = 'dark';
 // Light preview theme matches Keep's brighter surfaces.
 export const PREVIEW_THEME_LIGHT = 'light';
 
+// System preview theme follows the browser color-scheme preference.
+export const PREVIEW_THEME_SYSTEM = 'system';
+
 // Preview theme shown in popup settings.
-export const PREVIEW_THEMES = [PREVIEW_THEME_DARK, PREVIEW_THEME_LIGHT];
+export const PREVIEW_THEMES = [PREVIEW_THEME_SYSTEM, PREVIEW_THEME_DARK, PREVIEW_THEME_LIGHT];
 
 // Default preview theme used for new installs and resets.
-export const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
+export const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_SYSTEM;
 
 // Default behavior keeps CommonMark soft line breaks collapsed.
 export const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;

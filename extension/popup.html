@@ -34,6 +34,18 @@
             --preview-shadow: 0 10px 24px rgba(32, 33, 36, 0.08);
         }
 
+        @media (prefers-color-scheme: light) {
+            body[data-preview-theme="system"] {
+                --preview-bg: #ffffff;
+                --preview-ink: #202124;
+                --preview-surface: #f1f3f4;
+                --preview-muted: #5f6368;
+                --preview-border: #d7dce5;
+                --preview-link: #1a73e8;
+                --preview-shadow: 0 10px 24px rgba(32, 33, 36, 0.08);
+            }
+        }
+
         body[data-preserve-soft-breaks="true"] {
             --preview-copy-white-space: pre-line;
         }
@@ -179,7 +191,7 @@
 
         .theme-toggle {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 4px;
             padding: 4px;
             border-radius: 999px;
@@ -373,7 +385,7 @@
         }
     </style>
 </head>
-<body data-preview-theme="dark" data-preserve-soft-breaks="false">
+<body data-preview-theme="system" data-preserve-soft-breaks="false">
     <main class="panel">
         <header class="header">
             <img class="logo" src="icons/KeepDown_Logo_64x64.png" alt="">
@@ -414,11 +426,13 @@
             <div class="setting">
                 <div>
                     <div class="setting-title">Preview theme</div>
-                    <div class="setting-note">Switch the Markdown preview between the current dark surface and a lighter reading style.</div>
+                    <div class="setting-note">Follow Google Keep when available, fall back to system appearance, or choose a fixed theme.</div>
                 </div>
                 <div class="theme-picker">
                     <div class="theme-toggle" role="radiogroup" aria-label="Preview theme">
-                        <input type="radio" id="preview-theme-dark" name="preview-theme" value="dark" checked>
+                        <input type="radio" id="preview-theme-system" name="preview-theme" value="system" checked>
+                        <label class="theme-option" for="preview-theme-system">System</label>
+                        <input type="radio" id="preview-theme-dark" name="preview-theme" value="dark">
                         <label class="theme-option" for="preview-theme-dark">Dark</label>
                         <input type="radio" id="preview-theme-light" name="preview-theme" value="light">
                         <label class="theme-option" for="preview-theme-light">Light</label>
