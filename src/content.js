@@ -1,6 +1,3 @@
-import {micromark} from 'micromark';
-import {gfm, gfmHtml} from 'micromark-extension-gfm';
-import {math, mathHtml} from 'micromark-extension-math';
 import {
     clampNumber,
     findFirstMatchingElement,
@@ -12,6 +9,12 @@ import {
     setSyncStorage,
     shouldIgnoreMutations
 } from './utils.js';
+import {renderMarkdownWithAnchors} from './markdown-renderer.js';
+import {
+    invalidateScrollSync,
+    refreshScrollSync,
+    teardownScrollSync
+} from './scroll-sync.js';
 import {
     DEFAULT_EDITOR_MODAL_WIDTH,
     DEFAULT_MARKDOWN_ENABLED_KEY,
@@ -59,6 +62,12 @@ let preserveSoftLineBreaks = DEFAULT_PRESERVE_SOFT_LINE_BREAKS;
 
 // Guards document-wide modal scans so multiple mutations collapse into one pass.
 let scanScheduled = false;
+
+// Split panes need a minimum fixed viewport before editor-to-preview scroll sync can work.
+const MIN_SPLIT_PANE_HEIGHT = 180;
+
+// Leaves room for Keep's footer and modal padding below the split panes.
+const SPLIT_PANE_BOTTOM_PADDING = 24;
 
 // Stores one live context per Keep modal element.
 const modalContexts = new WeakMap();
@@ -189,6 +198,7 @@ function setModalWidthForTarget(target, width) {
 
     updateModalDimensions();
     updateAllResizeHandles();
+    refreshAllScrollSyncContexts();
 
     return normalizedWidth;
 }
@@ -196,13 +206,11 @@ function setModalWidthForTarget(target, width) {
 // Ignore extension-owned DOM and class churn on managed modals so scans only run for real Keep changes.
 function shouldIgnoreModalScan(mutations) {
     return mutations.length > 0 && mutations.every((mutation) => {
-        if (
-            mutation.type === 'attributes' &&
-            mutation.attributeName === 'class' &&
-            mutation.target.matches?.(MODAL_SELECTOR) &&
-            modalContexts.has(mutation.target)
-        ) {
-            return true;
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+            const managedModal = mutation.target.closest?.(MODAL_SELECTOR);
+            if (managedModal && modalContexts.has(managedModal)) {
+                return true;
+            }
         }
 
         return shouldIgnoreMutations([mutation], EXTENSION_OWNED_SELECTOR);
@@ -242,9 +250,14 @@ function createPreviewPanel(noteId) {
     console.log('Creating preview panel:', noteId);
 
     const preview = document.createElement('div');
-    preview.className = 'keep-md-preview';
+    preview.className = 'keep-md-preview is-render-pending';
     preview.id = `keep-md-preview-${noteId}`;
     return preview;
+}
+
+// Keep's shared modal wheel handlers should not steal wheel gestures from split panes.
+function stopSplitPaneWheelPropagation(event) {
+    event.stopPropagation();
 }
 
 // Creates a single view mode button using Keep-style DOM attributes.
@@ -384,6 +397,141 @@ function updateAllResizeHandles() {
     }
 }
 
+// Attaches wheel isolation only while split preview is active.
+function ensureSplitPaneWheelIsolation(context) {
+    if (!context.paneWheelListener) {
+        context.paneWheelListener = stopSplitPaneWheelPropagation;
+    }
+
+    context.sourceColumn?.addEventListener('wheel', context.paneWheelListener, {
+        capture: true,
+        passive: true
+    });
+    context.preview?.addEventListener('wheel', context.paneWheelListener, {
+        capture: true,
+        passive: true
+    });
+}
+
+// Removes split-pane wheel isolation when the preview is torn down.
+function removeSplitPaneWheelIsolation(context) {
+    if (!context.paneWheelListener) {
+        return;
+    }
+
+    context.sourceColumn?.removeEventListener('wheel', context.paneWheelListener, true);
+    context.preview?.removeEventListener('wheel', context.paneWheelListener, true);
+}
+
+// Removes the split-pane height override when the note is not in split mode.
+function clearSplitPaneHeight(context) {
+    context.modalNote.style.removeProperty('--keep-md-split-pane-height');
+}
+
+// Checks whether a layout box currently contributes visible height inside the modal.
+function isVisibleLayoutElement(element) {
+    if (!element?.isConnected) {
+        return false;
+    }
+
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') {
+        return false;
+    }
+
+    return element.getBoundingClientRect().height > 0;
+}
+
+// Measures every visible block below the split body so title and footer keep their natural space.
+function getReservedSplitPaneHeight(bodySection, modalSurface) {
+    let reservedHeight = 0;
+    let current = bodySection;
+
+    while (current && current !== modalSurface) {
+        let sibling = current.nextElementSibling;
+        while (sibling) {
+            if (isVisibleLayoutElement(sibling)) {
+                reservedHeight += sibling.getBoundingClientRect().height;
+            }
+
+            sibling = sibling.nextElementSibling;
+        }
+
+        current = current.parentElement;
+    }
+
+    return reservedHeight;
+}
+
+// Uses a viewport-based modal limit so focusing Keep fields cannot recursively resize the panes.
+function getModalSurfaceHeightLimit(modalSurface) {
+    const viewportLimit = Math.floor(window.innerHeight * 0.95);
+    const maxHeight = Number.parseFloat(window.getComputedStyle(modalSurface).maxHeight);
+
+    return Number.isFinite(maxHeight) && maxHeight > 0
+        ? Math.min(maxHeight, viewportLimit)
+        : viewportLimit;
+}
+
+// Converts only the markdown body into two independently scrollable panes.
+function updateSplitPaneHeight(context) {
+    if (
+        context.viewMode !== VIEW_MODE_SPLIT ||
+        !context.container?.isConnected ||
+        !context.sourceColumn?.isConnected ||
+        !context.preview?.isConnected
+    ) {
+        clearSplitPaneHeight(context);
+        return;
+    }
+
+    const bodySection = context.sourceColumn.closest('.IZ65Hb-qJTHM-haAclf');
+    const modalSurface = context.modalNote.querySelector('.IZ65Hb-n0tgWb') || context.modalNote;
+    if (!bodySection || !modalSurface) {
+        clearSplitPaneHeight(context);
+        return;
+    }
+
+    const surfaceRect = modalSurface.getBoundingClientRect();
+    const bodyRect = bodySection.getBoundingClientRect();
+    const topOffset = Math.max(bodyRect.top - surfaceRect.top, 0);
+    const reservedHeight = getReservedSplitPaneHeight(bodySection, modalSurface);
+    const availableHeight = Math.floor(
+        getModalSurfaceHeightLimit(modalSurface) - topOffset - reservedHeight - SPLIT_PANE_BOTTOM_PADDING
+    );
+    const splitPaneHeight = Math.max(
+        MIN_SPLIT_PANE_HEIGHT,
+        Number.isFinite(availableHeight) ? availableHeight : MIN_SPLIT_PANE_HEIGHT
+    );
+    const nextHeightValue = `${splitPaneHeight}px`;
+    if (context.modalNote.style.getPropertyValue('--keep-md-split-pane-height') === nextHeightValue) {
+        return;
+    }
+
+    const previousEditorScrollTop = context.editorScrollHost?.scrollTop;
+    const previousPreviewScrollTop = context.previewScrollHost?.scrollTop;
+    context.modalNote.style.setProperty('--keep-md-split-pane-height', nextHeightValue);
+    if (Number.isFinite(previousEditorScrollTop) && context.editorScrollHost?.isConnected) {
+        context.editorScrollHost.scrollTop = previousEditorScrollTop;
+    }
+    if (Number.isFinite(previousPreviewScrollTop) && context.previewScrollHost?.isConnected) {
+        context.previewScrollHost.scrollTop = previousPreviewScrollTop;
+    }
+}
+
+// Keeps split-pane layout and scroll sync in lockstep after DOM, width, or viewport changes.
+function refreshContextScrollSync(context) {
+    updateSplitPaneHeight(context);
+    refreshScrollSync(context);
+}
+
+// Recomputes split-view scroll sync after width or layout changes.
+function refreshAllScrollSyncContexts() {
+    for (const context of modalContextSet) {
+        refreshContextScrollSync(context);
+    }
+}
+
 // Converts a pointer x-coordinate into centered viewport width percentage.
 function getWidthFromPointer(clientX) {
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
@@ -490,24 +638,46 @@ function updateViewModeControls(context) {
 // Renders markdown into the preview panel when the source text changes.
 function updatePreview(context) {
     if (!context.preview) {
-        return;
+        return false;
     }
 
     const latestNoteContentMatch = findNoteContent(context.sourceColumn) || findNoteContent(context.modalNote);
     if (!latestNoteContentMatch) {
-        return;
+        return false;
     }
 
+    context.noteContent = latestNoteContentMatch.element;
     const markdownText = getMarkdownText(latestNoteContentMatch.element);
     // Avoid rewriting preview DOM when Keep re-scans the same unchanged note content.
     if (context.lastMarkdownText === markdownText && context.preview.hasChildNodes()) {
+        return false;
+    }
+
+    const renderedPreview = renderMarkdownWithAnchors(markdownText);
+    context.lastMarkdownText = markdownText;
+    context.preview.innerHTML = renderedPreview.html;
+    context.renderedAnchors = renderedPreview.anchors;
+    invalidateScrollSync(context);
+    return true;
+}
+
+// Batches preview renders so mutation bursts only trigger one markdown pass per frame.
+function schedulePreviewUpdate(context) {
+    if (!context.preview?.isConnected || context.previewUpdateScheduled) {
         return;
     }
 
-    context.lastMarkdownText = markdownText;
-    context.preview.innerHTML = micromark(markdownText, {
-        extensions: [gfm(), math()],
-        htmlExtensions: [gfmHtml(), mathHtml()]
+    context.previewUpdateScheduled = true;
+    requestAnimationFrame(() => {
+        context.previewUpdateScheduled = false;
+        if (!context.preview?.isConnected) {
+            return;
+        }
+
+        const didUpdate = updatePreview(context);
+        if (didUpdate) {
+            refreshContextScrollSync(context);
+        }
     });
 }
 
@@ -515,8 +685,8 @@ function updatePreview(context) {
 function showMarkdownPreview(context) {
     // If the preview already exists, only refresh its content.
     if (context.preview?.isConnected) {
-        updatePreview(context);
-        return;
+        schedulePreviewUpdate(context);
+        return false;
     }
 
     const parent = context.sourceColumn.parentElement;
@@ -538,25 +708,42 @@ function showMarkdownPreview(context) {
     context.preview = createPreviewPanel(Date.now());
     context.lastMarkdownText = null;
     container.appendChild(context.preview);
-
-    // Watch for content changes.
-    context.observer = new MutationObserver(() => {
-        updatePreview(context);
-    });
-
-    context.observer.observe(context.sourceColumn, {
-        childList: true,
-        characterData: true,
-        subtree: true
-    });
+    ensureSplitPaneWheelIsolation(context);
 
     // Initial render.
     updatePreview(context);
+    requestAnimationFrame(() => {
+        if (!context.preview?.isConnected) {
+            return;
+        }
+
+        context.preview.classList.remove('is-render-pending');
+        refreshContextScrollSync(context);
+
+        if (context.observer || !context.sourceColumn?.isConnected) {
+            return;
+        }
+
+        // Watch for content changes after the initial split layout settles.
+        context.observer = new MutationObserver(() => {
+            schedulePreviewUpdate(context);
+        });
+
+        context.observer.observe(context.sourceColumn, {
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
+    });
     console.log('Preview added:', context.preview.id);
+    return true;
 }
 
 // Removes preview DOM and restores the editor column to Keep's modal tree.
 function removeMarkdownPreview(context) {
+    teardownScrollSync(context);
+    removeSplitPaneWheelIsolation(context);
+    clearSplitPaneHeight(context);
     if (context.observer) {
         context.observer.disconnect();
         context.observer = null;
@@ -575,6 +762,8 @@ function removeMarkdownPreview(context) {
     context.container = null;
     context.preview = null;
     context.lastMarkdownText = null;
+    context.renderedAnchors = null;
+    context.previewUpdateScheduled = false;
 }
 
 // Applies mode-specific classes to the Keep modal for CSS targeting.
@@ -600,12 +789,15 @@ function applyViewMode(context) {
         return;
     }
 
-    showMarkdownPreview(context);
+    const createdPreview = showMarkdownPreview(context);
 
     const isPreviewOnly = context.viewMode === VIEW_MODE_PREVIEW;
     context.container?.classList.toggle('is-preview-only', isPreviewOnly);
     context.sourceColumn.classList.toggle('keep-md-source-hidden', isPreviewOnly);
     updateResizeHandle(context);
+    if (!createdPreview) {
+        refreshContextScrollSync(context);
+    }
 }
 
 // Existing modal scans should not re-render markdown unless the editor DOM was rebuilt.
@@ -631,6 +823,7 @@ function syncExistingContext(context) {
     const isPreviewOnly = context.viewMode === VIEW_MODE_PREVIEW;
     context.container.classList.toggle('is-preview-only', isPreviewOnly);
     context.sourceColumn.classList.toggle('keep-md-source-hidden', isPreviewOnly);
+    refreshContextScrollSync(context);
 }
 
 // Persists a user-selected note mode and updates the live modal.
@@ -696,6 +889,7 @@ async function handleNoteOpen(modalNote) {
             return;
         }
 
+        existingContext.noteContent = currentParts?.noteContent || existingContext.noteContent;
         syncExistingContext(existingContext);
         return;
     }
@@ -712,6 +906,7 @@ async function handleNoteOpen(modalNote) {
 
     const context = {
         modalNote,
+        noteContent: currentParts.noteContent,
         sourceColumn: currentParts.sourceColumn,
         noteKey: currentParts.noteKey,
         modeStorageKey: getNoteModeStorageKey(currentParts.noteKey),
@@ -722,7 +917,17 @@ async function handleNoteOpen(modalNote) {
         observer: null,
         viewControls: null,
         resizeHandle: null,
-        lastMarkdownText: null
+        lastMarkdownText: null,
+        renderedAnchors: null,
+        editorScrollHost: null,
+        previewScrollHost: null,
+        sourceLineMetrics: null,
+        previewAnchorMetrics: null,
+        previewUpdateScheduled: false,
+        scrollSyncFrame: 0,
+        previewResizeObserver: null,
+        editorScrollListener: null,
+        paneWheelListener: null
     };
 
     modalContexts.set(modalNote, context);
@@ -742,6 +947,8 @@ async function handleNoteOpen(modalNote) {
 
 // Disconnects observers and removes extension-owned controls for a modal context.
 function destroyContext(context) {
+    teardownScrollSync(context);
+    clearSplitPaneHeight(context);
     if (context.observer) {
         context.observer.disconnect();
     }
@@ -816,9 +1023,39 @@ function updateModalDimensions(widths = {}) {
             box-sizing: border-box !important;
         }
 
-        /* Container takes natural height. */
-        .keep-md-container {
-            height: auto !important;
+        /* Split mode keeps Keep's title/footer natural and constrains only the note body. */
+        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .IZ65Hb-qJTHM-haAclf,
+        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-container {
+            overflow: hidden !important;
+        }
+
+        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-container {
+            align-items: stretch !important;
+            height: var(--keep-md-split-pane-height, auto) !important;
+            min-height: 0 !important;
+        }
+
+        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-source,
+        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-preview {
+            flex: 1 1 0 !important;
+            height: var(--keep-md-split-pane-height, auto) !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            align-self: stretch !important;
+            box-sizing: border-box !important;
+            overscroll-behavior: contain !important;
+            overflow-y: auto !important;
+            scrollbar-gutter: stable both-edges !important;
+        }
+
+        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-preview {
+            margin: 0 !important;
+            padding-bottom: 32px !important;
+        }
+
+        .VIpgJd-TUo6Hb.XKSfm-L9AdLc.keep-md-mode-split .keep-md-source {
+            padding-right: 8px !important;
+            padding-bottom: 32px !important;
         }
     `;
 
@@ -854,6 +1091,7 @@ chrome.runtime.onMessage.addListener((message) => {
             [MARKDOWN_MODAL_WIDTH_KEY]: message.markdownWidth
         });
         updateAllResizeHandles();
+        refreshAllScrollSyncContexts();
         return;
     }
 
@@ -870,6 +1108,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
     if (message.type === 'updatePreserveSoftLineBreaks') {
         applySoftLineBreakPreference(message.value);
+        refreshAllScrollSyncContexts();
     }
 });
 
@@ -897,6 +1136,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         if (dimensionsChanged) {
             updateModalDimensions();
             updateAllResizeHandles();
+            refreshAllScrollSyncContexts();
         }
 
         if (changes[DEFAULT_MARKDOWN_ENABLED_KEY]) {
@@ -910,6 +1150,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
         if (changes[PRESERVE_SOFT_LINE_BREAKS_KEY]) {
             applySoftLineBreakPreference(changes[PRESERVE_SOFT_LINE_BREAKS_KEY].newValue);
+            refreshAllScrollSyncContexts();
         }
 
         return;
@@ -977,6 +1218,9 @@ function init() {
         attributes: true,
         attributeFilter: ['class']
     });
+
+    // Resize the split panes when the viewport changes so scroll hosts stay valid.
+    window.addEventListener('resize', refreshAllScrollSyncContexts);
 }
 
 // Scans the document for currently open Keep note modals.

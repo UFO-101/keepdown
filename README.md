@@ -8,6 +8,7 @@ A Chrome extension that adds real-time Markdown preview to Google Keep notes. Wr
 
 - Real-time side-by-side Markdown preview
 - Three Markdown view modes: **Editor** / **Editor and Preview** / **Preview**
+- Automatic editor-to-preview scroll sync in **Editor and Preview** mode
 - Built on top of [micromark](https://github.com/micromark/micromark)
     - 100% CommonMark compliant
     - GitHub Flavored Markdown supported
@@ -24,7 +25,7 @@ A Chrome extension that adds real-time Markdown preview to Google Keep notes. Wr
 A three-button toggle is added next to Keep's "Pin note" button inside the modal:
 
 - **Editor** — Default Google Keep editing view, no Markdown preview
-- **Editor and Preview** — Side-by-side editor and rendered Markdown preview
+- **Editor and Preview** — Side-by-side editor and rendered Markdown preview, with preview scrolling following the editor automatically
 - **Preview** — Rendered Markdown only, editor hidden
 
 The active mode is saved per-note, so each note remembers its own view preference.

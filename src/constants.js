@@ -61,6 +61,18 @@ export const DEFAULT_PREVIEW_THEME = PREVIEW_THEME_DARK;
 // Default behavior keeps CommonMark soft line breaks collapsed.
 export const DEFAULT_PRESERVE_SOFT_LINE_BREAKS = false;
 
+// Preview block attribute for the first markdown source line covered by a block.
+export const PREVIEW_SOURCE_START_LINE_ATTRIBUTE = 'data-keep-md-source-start-line';
+
+// Preview block attribute for the last markdown source line covered by a block.
+export const PREVIEW_SOURCE_END_LINE_ATTRIBUTE = 'data-keep-md-source-end-line';
+
+// Preview block attribute that records the mdast block kind for debugging.
+export const PREVIEW_BLOCK_KIND_ATTRIBUTE = 'data-keep-md-block-kind';
+
+// Selector used to find preview blocks that participate in scroll sync.
+export const PREVIEW_SOURCE_ANCHOR_SELECTOR = `[${PREVIEW_SOURCE_START_LINE_ATTRIBUTE}][${PREVIEW_SOURCE_END_LINE_ATTRIBUTE}]`;
+
 // Editor-only view mode.
 export const VIEW_MODE_EDITOR = 'editor';
 
@@ -81,4 +93,4 @@ export const VIEW_MODE_LABELS = {
 };
 
 // Selector for DOM owned by this extension and ignored by document scans.
-export const EXTENSION_OWNED_SELECTOR = '.keep-md-preview, .keep-md-view-controls, .keep-md-resize-handle';
+export const EXTENSION_OWNED_SELECTOR = '.keep-md-container, .keep-md-source, .keep-md-preview, .keep-md-view-controls, .keep-md-resize-handle';
