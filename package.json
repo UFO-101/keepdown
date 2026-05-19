@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite build --watch --mode development",
-    "build": "vite build --mode production"
+    "dev": "vite build --watch",
+    "build": "vite build"
   },
   "main": "content.js",
   "keywords": [],
