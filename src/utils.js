@@ -65,18 +65,58 @@ export function getLineText(element) {
         .trimEnd();
 }
 
+// Normalizes one Keep editor line into the markdown text used by the renderer.
+export function normalizeMarkdownLineText(value) {
+    return value
+        .replace(/^"(.*)"$/, '$1') // Remove surrounding quotes.
+        .replace(/\\n/g, '\n') // Restore escaped newlines.
+        .replace(/\\"([^"]+)\\"/g, '"$1"'); // Restore escaped quotes.
+}
+
+// Trims edge-only blank lines so line numbering matches the final markdown text.
+function trimMarkdownLineEntries(entries) {
+    let start = 0;
+    let end = entries.length - 1;
+
+    while (start <= end && entries[start].text.trim() === '') {
+        start += 1;
+    }
+
+    while (end >= start && entries[end].text.trim() === '') {
+        end -= 1;
+    }
+
+    return start > end ? [] : entries.slice(start, end + 1);
+}
+
+// Extracts markdown line entries and preserves the DOM element that owns each line.
+export function getMarkdownLineEntries(noteContent) {
+    const lineElements = Array.from(noteContent.querySelectorAll('p, div[role="presentation"]'));
+    const entries = lineElements.length > 0
+        ? lineElements.flatMap((element) => {
+            const parts = normalizeMarkdownLineText(getLineText(element)).split('\n');
+            return parts.map((text, partIndex) => ({
+                element,
+                text,
+                partIndex,
+                partCount: parts.length
+            }));
+        })
+        : normalizeMarkdownLineText(getText(noteContent)).split('\n').map((text, partIndex, parts) => ({
+            element: noteContent,
+            text,
+            partIndex,
+            partCount: parts.length
+        }));
+
+    return trimMarkdownLineEntries(entries);
+}
+
 // Extracts markdown text from Keep's paragraph-based editor structure.
 export function getMarkdownText(noteContent) {
-    const lineElements = noteContent.querySelectorAll('p, div[role="presentation"]');
-    const text = lineElements.length > 0
-        ? Array.from(lineElements, getLineText).join('\n')
-        : getText(noteContent);
-
-    return text
-        .replace(/\u00a0/g, ' ')
-        .replace(/^"(.*)"$/gm, '$1') // Remove surrounding quotes.
-        .replace(/\\n/g, '\n') // Restore escaped newlines.
-        .replace(/\\"([^"]+)\\"/g, '"$1"') // Restore escaped quotes.
+    return getMarkdownLineEntries(noteContent)
+        .map((entry) => entry.text)
+        .join('\n')
         .trim();
 }
 
