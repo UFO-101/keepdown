@@ -3,6 +3,7 @@
     --keep-md-editor-modal-width: 600px;
     --keep-md-split-modal-width: 75vw;
     --keep-md-preview-modal-width: 75vw;
+    --keep-md-expanded-modal-top: 24px;
     --keep-md-preview-bg: #2a2b2e;
     --keep-md-preview-text: #e8eaed;
     --keep-md-preview-surface: #303134;
@@ -321,6 +322,11 @@ html.keep-md-is-resizing * {
     width: var(--keep-md-preview-modal-width) !important;
 }
 
+/* Long markdown layouts need a viewport-based top instead of Keep's short-note top. */
+.keep-md-modal-top-pinned {
+    top: var(--keep-md-expanded-modal-top) !important;
+}
+
 /* Target the inner modal container. */
 .keep-md-modal .IZ65Hb-n0tgWb {
     width: 100% !important;
@@ -349,6 +355,11 @@ html.keep-md-is-resizing * {
 
 .keep-md-modal .IZ65Hb-r4nke-haAclf {
     padding-bottom: 12px !important;
+}
+
+.keep-md-mode-split .IZ65Hb-vIzZGf-L9AdLc-haAclf {
+    box-sizing: border-box !important;
+    min-height: 100% !important;
 }
 
 /* Split mode keeps Keep's title/footer natural and constrains only the note body. */

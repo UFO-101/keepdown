@@ -82,6 +82,12 @@ const MIN_SPLIT_PANE_HEIGHT = 180;
 // Leaves room for Keep's footer and modal padding below the split panes.
 const SPLIT_PANE_BOTTOM_PADDING = 24;
 
+// Preview modals only need top pinning once they become visually tall.
+const PREVIEW_TOP_PIN_HEIGHT_RATIO = 0.6;
+
+// Keep native short-note top values should not push expanded markdown content below the viewport.
+const EXPANDED_MODAL_VIEWPORT_PADDING = 24;
+
 // Stores one live context per Keep modal element.
 const modalContexts = new WeakMap();
 
@@ -522,6 +528,7 @@ function updateSplitPaneHeight(context) {
 // Keeps split-pane layout and scroll sync in lockstep after DOM, width, or viewport changes.
 function refreshContextScrollSync(context) {
     updateSplitPaneHeight(context);
+    updateExpandedModalTop(context);
 
     if (scrollSyncEnabled) {
         refreshScrollSync(context);
@@ -549,6 +556,31 @@ function scheduleAllScrollSyncContextsRefresh() {
         scrollSyncRefreshScheduled = false;
         refreshAllScrollSyncContexts();
     });
+}
+
+// Pins only tall markdown layouts; short preview notes keep Keep's native vertical position.
+function updateExpandedModalTop(context) {
+    const shouldPinTop = shouldPinExpandedModalTop(context);
+    context.modalNote.classList.toggle('keep-md-modal-top-pinned', shouldPinTop);
+}
+
+function shouldPinExpandedModalTop(context) {
+    if (context.viewMode === VIEW_MODE_SPLIT) {
+        return true;
+    }
+
+    if (context.viewMode !== VIEW_MODE_PREVIEW || !context.preview?.isConnected) {
+        return false;
+    }
+
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    if (viewportHeight <= 0) {
+        return false;
+    }
+
+    const modalRect = context.modalNote.getBoundingClientRect();
+    return modalRect.height >= viewportHeight * PREVIEW_TOP_PIN_HEIGHT_RATIO ||
+        modalRect.bottom > viewportHeight - EXPANDED_MODAL_VIEWPORT_PADDING;
 }
 
 // Converts a pointer x-coordinate into the active mode's width unit.
@@ -755,6 +787,7 @@ function removeMarkdownPreview(context) {
     teardownScrollSync(context);
     removeSplitPaneWheelIsolation(context);
     clearSplitPaneHeight(context);
+    context.modalNote.classList.remove('keep-md-modal-top-pinned');
     if (context.observer) {
         context.observer.disconnect();
         context.observer = null;
@@ -805,6 +838,7 @@ function applyViewMode(context) {
     const isPreviewOnly = context.viewMode === VIEW_MODE_PREVIEW;
     context.container?.classList.toggle('is-preview-only', isPreviewOnly);
     context.sourceColumn.classList.toggle('keep-md-source-hidden', isPreviewOnly);
+    updateExpandedModalTop(context);
     updateResizeHandle(context);
     if (!createdPreview) {
         refreshContextScrollSync(context);
@@ -838,6 +872,7 @@ function syncExistingContext(context) {
     const isPreviewOnly = context.viewMode === VIEW_MODE_PREVIEW;
     context.container.classList.toggle('is-preview-only', isPreviewOnly);
     context.sourceColumn.classList.toggle('keep-md-source-hidden', isPreviewOnly);
+    updateExpandedModalTop(context);
     refreshContextScrollSync(context);
 }
 
@@ -992,6 +1027,7 @@ function destroyContext(context) {
     for (const mode of VIEW_MODES) {
         context.modalNote.classList.remove(`keep-md-mode-${mode}`);
     }
+    context.modalNote.classList.remove('keep-md-modal-top-pinned');
     delete context.modalNote.dataset.keepMdViewMode;
 
     modalContexts.delete(context.modalNote);
