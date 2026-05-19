@@ -37246,6 +37246,8 @@
         'thematicBreak'
     ]);
 
+    const MATH_NODE_TYPES = new Set(['inlineMath', 'math']);
+
     // Renders markdown to HTML and annotates block nodes with source line metadata.
     function renderMarkdownWithAnchors(markdownText) {
         const tree = fromMarkdown(markdownText, {
@@ -37255,6 +37257,10 @@
         const anchors = [];
 
         visit(tree, (node) => {
+            if (MATH_NODE_TYPES.has(node.type)) {
+                removeDefaultMathHastData(node);
+            }
+
             const startLine = node.position?.start?.line;
             const endLine = node.position?.end?.line;
             if (!ANCHOR_NODE_TYPES.has(node.type) || !startLine || !endLine) {
@@ -37321,6 +37327,24 @@
         return state.applyData(node, result);
     }
 
+    // mdast-util-math defaults to code-shaped hast data; KaTeX handlers need to own it.
+    function removeDefaultMathHastData(node) {
+        if (!node.data) {
+            return;
+        }
+
+        delete node.data.hName;
+        delete node.data.hChildren;
+        delete node.data.hProperties;
+    }
+
+    function renderMathToString(value, displayMode) {
+        return katex.renderToString(value, {
+            displayMode,
+            throwOnError: false
+        });
+    }
+
     // Renders inline math using the same wrapper classes as the existing micromark pipeline.
     function inlineMathHandler(state, node) {
         const result = {
@@ -37329,7 +37353,7 @@
             properties: {className: ['math', 'math-inline']},
             children: [{
                 type: 'raw',
-                value: katex.renderToString(node.value, {displayMode: false})
+                value: renderMathToString(node.value, false)
             }]
         };
 
@@ -37345,7 +37369,7 @@
             properties: {className: ['math', 'math-display']},
             children: [{
                 type: 'raw',
-                value: katex.renderToString(node.value, {displayMode: true})
+                value: renderMathToString(node.value, true)
             }]
         };
 
