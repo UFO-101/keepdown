@@ -20,6 +20,8 @@ A Chrome extension that adds real-time Markdown preview to Google Keep notes. Wr
 
 <img src="docs/screenshots/SummaryScreenshot.png" width="800" alt="Editing a note with markdown">
 
+<img src="docs/screenshots/SummaryScreenshotLight.png" width="800" alt="Editing a note with markdown">
+
 ## Markdown View Modes
 
 A three-button toggle is added next to Keep's "Pin note" button inside the modal:
@@ -29,6 +31,8 @@ A three-button toggle is added next to Keep's "Pin note" button inside the modal
 - **Preview** — Rendered Markdown only, editor hidden
 
 The active mode is saved per-note, so each note remembers its own view preference.
+
+<img src="docs/screenshots/ScrollSyncRecord.gif" width="800" alt="Side-by-side editor and preview">
 
 ## Extension Settings
 
@@ -44,7 +48,7 @@ Click the extension icon to open the settings popup:
 
 All changes sync instantly to any open Keep tab without reloading.
 
-<img src="docs/screenshots/WidthSliderScreenshot.png" width="800" alt="Rendered markdown preview">
+<img src="docs/screenshots/SettingsPopupScreenshot.png" width="800" alt="Rendered markdown preview">
 
 ## Chrome Extension Permissions
 
